@@ -1,45 +1,36 @@
 package handler
 
 import (
+	"NewsAggregator/internal/model"
 	"encoding/json"
 	"net/http"
 	"strconv"
-
-	"github.com/google/uuid"
 )
 
 func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	var userID uuid.UUID
-
-	if err := json.NewDecoder(r.Body).Decode(&userID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	user, ok := r.Context().Value(userContextKey).(model.User)
+	if !ok {
+		http.Error(w, "User not found in context", http.StatusInternalServerError)
 		return
 	}
-	defer r.Body.Close()
-
 	limitStr := r.URL.Query().Get("limit")
 	offsetStr := r.URL.Query().Get("offset")
+	limit := 10
+	offset := 0
 
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if limitStr != "" {
+		limit, _ = strconv.Atoi(limitStr)
 	}
-	offset, err := strconv.Atoi(offsetStr)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	if offsetStr != "" {
+		offset, _ = strconv.Atoi(offsetStr)
 	}
 
-	feeds, err := h.storage.GetPosts(ctx, userID, limit, offset)
+	feeds, err := h.storage.GetPosts(r.Context(), user.ID, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(feeds); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	json.NewEncoder(w).Encode(feeds)
 }

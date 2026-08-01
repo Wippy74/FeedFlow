@@ -1,0 +1,38 @@
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    name VARCHAR(256) NOT NULL,
+    api_key VARCHAR(64) UNIQUE NOT NULL
+);
+
+CREATE TABLE feeds (
+    id UUID PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    name TEXT NOT NULL,
+    url TEXT UNIQUE NOT NULL,
+    last_fetched_at TIMESTAMP WITH TIME ZONE
+);
+
+CREATE TABLE feed_follows (
+    id UUID PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    feed_id UUID NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+    UNIQUE(user_id, feed_id)
+);
+
+CREATE TABLE posts (
+    id UUID PRIMARY KEY,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT,
+    published_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    url TEXT UNIQUE NOT NULL,
+    feed_id UUID NOT NULL REFERENCES feeds(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_posts_published_at ON posts(published_at DESC);

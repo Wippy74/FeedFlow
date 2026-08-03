@@ -17,5 +17,5 @@ func ReadConfig() (string, error) {
 	name := os.Getenv("DB_NAME")
 	host := os.Getenv("DB_HOST")
 	port := os.Getenv("DB_PORT")
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s", user, password, host, port, name), nil
+	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, password, host, port, name), nil
 }

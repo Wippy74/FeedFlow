@@ -2,6 +2,7 @@ package main
 
 import (
 	"NewsAggregator/internal/config"
+	"NewsAggregator/internal/database/migrations"
 	"NewsAggregator/internal/database/storage"
 	"NewsAggregator/internal/handler"
 	"NewsAggregator/internal/worker"
@@ -21,13 +22,16 @@ func main() {
 		log.Fatal(err)
 		return
 	}
+
+	log.Println("Connecting to database")
+	migrations.RunMigrations(dbUrl)
+
 	conn, err := pgx.Connect(context.Background(), dbUrl)
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 	defer conn.Close(context.Background())
-
 	log.Println("Connected to database")
 
 	repo := storage.NewRepository(conn)

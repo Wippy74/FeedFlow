@@ -12,7 +12,7 @@ func (repo *Repository) GetPosts(ctx context.Context, userID uuid.UUID, limit, o
          WHERE feed_follows.user_id = $1 
          ORDER BY posts.published_at DESC LIMIT $2 OFFSET $3`
 
-	var posts []model.Post
+	posts := []model.Post{}
 	raws, err := repo.db.Query(ctx, query, userID, limit, offset)
 	if err != nil {
 		return nil, err

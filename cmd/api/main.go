@@ -1,6 +1,7 @@
 package main
 
 import (
+	cache2 "NewsAggregator/internal/cache"
 	"NewsAggregator/internal/config"
 	"NewsAggregator/internal/database/migrations"
 	"NewsAggregator/internal/database/storage"
@@ -17,16 +18,16 @@ import (
 )
 
 func main() {
-	dbUrl, err := config.ReadConfig()
+	cfg, err := config.ReadConfig()
 	if err != nil {
 		log.Fatal(err)
 		return
 	}
 
 	log.Println("Connecting to database")
-	migrations.RunMigrations(dbUrl)
+	migrations.RunMigrations(cfg.DBUrl)
 
-	conn, err := pgx.Connect(context.Background(), dbUrl)
+	conn, err := pgx.Connect(context.Background(), cfg.DBUrl)
 	if err != nil {
 		log.Fatal(err)
 		return
@@ -35,13 +36,15 @@ func main() {
 	log.Println("Connected to database")
 
 	repo := storage.NewRepository(conn)
+	cache := cache2.NewRedisCache(cfg.RedisAddr)
 	go func() {
 		err := worker.Start(repo, 1*time.Minute, 3)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}()
-	apiHandler := handler.NewHandler(repo)
+
+	apiHandler := handler.NewHandler(repo, cache)
 	router := apiHandler.InitRouter()
 	port := ":8080"
 	server := &http.Server{

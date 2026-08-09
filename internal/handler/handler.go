@@ -4,6 +4,7 @@ import (
 	"NewsAggregator/internal/model"
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -18,13 +19,20 @@ type Storage interface {
 	GetUserByApiKey(ctx context.Context, apiKey string) (model.User, error)
 }
 
-type Handler struct {
-	storage Storage
+type Cache interface {
+	Set(ctx context.Context, key string, posts []model.Post, ttl time.Duration) error
+	Get(ctx context.Context, key string) ([]model.Post, error)
 }
 
-func NewHandler(storage Storage) *Handler {
+type Handler struct {
+	storage Storage
+	cache   Cache
+}
+
+func NewHandler(storage Storage, cache Cache) *Handler {
 	return &Handler{
 		storage: storage,
+		cache:   cache,
 	}
 }
 

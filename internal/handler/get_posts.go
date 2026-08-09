@@ -2,13 +2,21 @@ package handler
 
 import (
 	"NewsAggregator/internal/model"
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
-	user, ok := r.Context().Value(userContextKey).(model.User)
+	ctx := r.Context()
+	user, ok := ctx.Value(userContextKey).(model.User)
 	if !ok {
 		http.Error(w, "User not found in context", http.StatusInternalServerError)
 		return
@@ -25,12 +33,34 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 		offset, _ = strconv.Atoi(offsetStr)
 	}
 
-	feeds, err := h.storage.GetPosts(r.Context(), user.ID, limit, offset)
+	cacheKey := fmt.Sprintf("posts:user:%s:limit:%d:offset:%d", user.ID, limit, offset)
+	w.Header().Set("Content-Type", "application/json")
+
+	cachedPost, err := h.cache.Get(ctx, cacheKey)
+	if err == nil {
+		w.Header().Set("X-Cache", "HIT")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(cachedPost)
+	} else if errors.Is(err, redis.Nil) {
+		log.Printf("error during cache get: %v", err)
+	}
+
+	posts, err := h.storage.GetPosts(r.Context(), user.ID, limit, offset)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json")
+	if posts == nil {
+		posts = []model.Post{}
+	}
+
+	go func(cacheKey string, posts []model.Post) {
+		bgCtx := context.Background()
+		if err := h.cache.Set(bgCtx, cacheKey, posts, 1*time.Minute); err != nil {
+			log.Printf("error during cache set: %v", err)
+		}
+	}(cacheKey, posts)
+	w.Header().Set("X-Cache", "MISS")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(feeds)
+	json.NewEncoder(w).Encode(posts)
 }

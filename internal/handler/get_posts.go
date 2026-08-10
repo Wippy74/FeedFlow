@@ -36,7 +36,7 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 	cacheKey := fmt.Sprintf("posts:user:%s:limit:%d:offset:%d", user.ID, limit, offset)
 	w.Header().Set("Content-Type", "application/json")
 
-	cachedPost, err := h.cache.Get(ctx, cacheKey)
+	cachedPost, err := h.cache.GetPost(ctx, cacheKey)
 	if err == nil {
 		w.Header().Set("X-Cache", "HIT")
 		w.WriteHeader(http.StatusOK)
@@ -56,7 +56,7 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 
 	go func(cacheKey string, posts []model.Post) {
 		bgCtx := context.Background()
-		if err := h.cache.Set(bgCtx, cacheKey, posts, 1*time.Minute); err != nil {
+		if err := h.cache.SetPost(bgCtx, cacheKey, posts, 1*time.Minute); err != nil {
 			log.Printf("error during cache set: %v", err)
 		}
 	}(cacheKey, posts)

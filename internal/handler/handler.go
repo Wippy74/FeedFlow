@@ -20,8 +20,10 @@ type Storage interface {
 }
 
 type Cache interface {
-	Set(ctx context.Context, key string, posts []model.Post, ttl time.Duration) error
-	Get(ctx context.Context, key string) ([]model.Post, error)
+	SetPost(ctx context.Context, key string, posts []model.Post, ttl time.Duration) error
+	GetPost(ctx context.Context, key string) ([]model.Post, error)
+	SetUser(ctx context.Context, key string, user model.User, ttl time.Duration) error
+	GetUser(ctx context.Context, key string) (model.User, error)
 }
 
 type Handler struct {

@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -27,6 +29,12 @@ func (h *Handler) PostFeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	go func() {
+		if err := h.cache.Delete(context.Background(), "feeds:all"); err != nil {
+			log.Printf("Failed to delete cache: %v", err)
+		}
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

@@ -58,3 +58,27 @@ func (c *RedisCache) GetUser(ctx context.Context, key string) (model.User, error
 	}
 	return user, nil
 }
+
+func (c *RedisCache) SetFeeds(ctx context.Context, key string, feeds []model.Feed, ttl time.Duration) error {
+	data, err := json.Marshal(feeds)
+	if err != nil {
+		return err
+	}
+	return c.client.Set(ctx, key, data, ttl).Err()
+}
+
+func (c *RedisCache) GetFeeds(ctx context.Context, key string) ([]model.Feed, error) {
+	val, err := c.client.Get(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+	var feeds []model.Feed
+	if err := json.Unmarshal([]byte(val), &feeds); err != nil {
+		return nil, err
+	}
+	return feeds, nil
+}
+
+func (c *RedisCache) Delete(ctx context.Context, key string) error {
+	return c.client.Del(ctx, key).Err()
+}

@@ -24,6 +24,9 @@ type Cache interface {
 	GetPost(ctx context.Context, key string) ([]model.Post, error)
 	SetUser(ctx context.Context, key string, user model.User, ttl time.Duration) error
 	GetUser(ctx context.Context, key string) (model.User, error)
+	SetFeeds(ctx context.Context, key string, feeds []model.Feed, ttl time.Duration) error
+	GetFeeds(ctx context.Context, key string) ([]model.Feed, error)
+	Delete(ctx context.Context, key string) error
 }
 
 type Handler struct {

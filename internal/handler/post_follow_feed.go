@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"NewsAggregator/internal/model"
 	"encoding/json"
 	"net/http"
 
@@ -10,7 +11,6 @@ import (
 func (h *Handler) PostFollowFeed(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	type parameters struct {
-		UserID uuid.UUID `json:"userId"`
 		FeedID uuid.UUID `json:"feedId"`
 	}
 
@@ -21,7 +21,13 @@ func (h *Handler) PostFollowFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	err := h.storage.FollowFeed(ctx, params.UserID, params.FeedID)
+	user, ok := ctx.Value(userContextKey).(model.User)
+	if !ok {
+		http.Error(w, "User not found in context", http.StatusInternalServerError)
+		return
+	}
+
+	err := h.storage.FollowFeed(ctx, user.ID, params.FeedID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

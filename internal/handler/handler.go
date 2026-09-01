@@ -30,14 +30,18 @@ type Cache interface {
 }
 
 type Handler struct {
-	storage Storage
-	cache   Cache
+	storage         Storage
+	cache           Cache
+	idGenerator     func() uuid.UUID
+	apiKeyGenerator func() (string, error)
 }
 
 func NewHandler(storage Storage, cache Cache) *Handler {
 	return &Handler{
-		storage: storage,
-		cache:   cache,
+		storage:         storage,
+		cache:           cache,
+		idGenerator:     uuid.New,
+		apiKeyGenerator: generateAPIKey,
 	}
 }
 

@@ -24,8 +24,8 @@ func (h *Handler) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			http.Error(w, "Empty Authorization header", http.StatusUnauthorized)
 			return
 		}
-		vals := strings.Split(authHeader, " ")
-		if len(vals) != 2 && vals[0] != "ApiKey" {
+		vals := strings.Fields(authHeader)
+		if len(vals) != 2 || vals[0] != "ApiKey" || vals[1] == "" {
 			http.Error(w, "Invalid Authorization header", http.StatusUnauthorized)
 			return
 		}

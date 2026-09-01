@@ -26,8 +26,17 @@ func main() {
 	log.Println("Connecting to database")
 	migrations.RunMigrations(cfg.DBUrl)
 
+	poolConfig, err := pgxpool.ParseConfig(cfg.DBUrl)
+	if err != nil {
+		log.Fatalf("failed to parse database pool config: %v", err)
+	}
+	poolConfig.MaxConns = cfg.DBMaxConns
+	poolConfig.MinConns = cfg.DBMinConns
+	poolConfig.MaxConnLifetime = cfg.DBMaxConnLifetime
+	poolConfig.MaxConnIdleTime = cfg.DBMaxConnIdleTime
+
 	connectCtx, cancelConnect := context.WithTimeout(context.Background(), 10*time.Second)
-	dbPool, err := pgxpool.New(connectCtx, cfg.DBUrl)
+	dbPool, err := pgxpool.NewWithConfig(connectCtx, poolConfig)
 	if err != nil {
 		cancelConnect()
 		log.Fatalf("failed to create database pool: %v", err)

@@ -40,8 +40,11 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		w.Header().Set("X-Cache", "HIT")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(cachedPost)
-	} else if errors.Is(err, redis.Nil) {
+		if err := json.NewEncoder(w).Encode(cachedPost); err != nil {
+			log.Printf("error encoding cached posts: %v", err)
+		}
+		return
+	} else if !errors.Is(err, redis.Nil) {
 		log.Printf("error during cache get: %v", err)
 	}
 

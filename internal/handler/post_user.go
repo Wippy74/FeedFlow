@@ -3,28 +3,31 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/google/uuid"
 )
 
 func (h *Handler) PostUser(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	type params struct {
-		ID     uuid.UUID `json:"id"`
-		Name   string    `json:"name"`
-		ApiKey string    `json:"apiKey"`
+		Name string `json:"name"`
 	}
 
 	var parameters params
 
 	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
 	if err := dec.Decode(&parameters); err != nil {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
 
-	savedUser, err := h.storage.SaveUser(ctx, parameters.ID, parameters.Name, parameters.ApiKey)
+	apiKey, err := h.apiKeyGenerator()
+	if err != nil {
+		http.Error(w, "failed to generate API key", http.StatusInternalServerError)
+		return
+	}
+
+	savedUser, err := h.storage.SaveUser(ctx, h.idGenerator(), parameters.Name, apiKey)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

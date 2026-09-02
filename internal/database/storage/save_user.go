@@ -1,9 +1,10 @@
 package storage
 
 import (
-	"NewsAggregator/internal/model"
 	"context"
 	"time"
+
+	"NewsAggregator/internal/model"
 
 	"github.com/google/uuid"
 )

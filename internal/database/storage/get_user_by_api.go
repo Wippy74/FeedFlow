@@ -1,8 +1,9 @@
 package storage
 
 import (
-	"NewsAggregator/internal/model"
 	"context"
+
+	"NewsAggregator/internal/model"
 )
 
 func (repo *Repository) GetUserByApiKey(ctx context.Context, apiKey string) (model.User, error) {

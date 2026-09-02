@@ -1,8 +1,9 @@
 package storage
 
 import (
-	"NewsAggregator/internal/model"
 	"context"
+
+	"NewsAggregator/internal/model"
 )
 
 func (repo *Repository) GetAllFeeds(ctx context.Context) ([]model.Feed, error) {

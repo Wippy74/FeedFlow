@@ -57,12 +57,11 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 		posts = []model.Post{}
 	}
 
-	go func(cacheKey string, posts []model.Post) {
-		bgCtx := context.Background()
-		if err := h.cache.SetPost(bgCtx, cacheKey, posts, 1*time.Minute); err != nil {
+	h.runInBackground(func(bgCtx context.Context) {
+		if err := h.cache.SetPost(bgCtx, cacheKey, posts, 1*time.Minute); err != nil && bgCtx.Err() == nil {
 			log.Printf("error during cache set: %v", err)
 		}
-	}(cacheKey, posts)
+	})
 	w.Header().Set("X-Cache", "MISS")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(posts)

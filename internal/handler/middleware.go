@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"NewsAggregator/internal/model"
 	"context"
 	"errors"
 	"fmt"
@@ -48,12 +47,11 @@ func (h *Handler) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		go func(key string, user model.User) {
-			bgCtx := context.Background()
-			if err := h.cache.SetUser(bgCtx, key, user, 15*time.Minute); err != nil {
+		h.runInBackground(func(bgCtx context.Context) {
+			if err := h.cache.SetUser(bgCtx, cacheKey, user, 15*time.Minute); err != nil && bgCtx.Err() == nil {
 				log.Printf("Error setting user to cache: %v", err)
 			}
-		}(cacheKey, user)
+		})
 
 		ctx = context.WithValue(ctx, userContextKey, user)
 		next(w, r.WithContext(ctx))

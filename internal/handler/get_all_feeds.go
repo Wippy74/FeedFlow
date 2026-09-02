@@ -37,12 +37,11 @@ func (h *Handler) GetAllFeeds(w http.ResponseWriter, r *http.Request) {
 		allFeeds = []model.Feed{}
 	}
 
-	go func(key string, feeds []model.Feed) {
-		bgCtx := context.Background()
-		if err := h.cache.SetFeeds(bgCtx, key, feeds, 1*time.Hour); err != nil {
+	h.runInBackground(func(bgCtx context.Context) {
+		if err := h.cache.SetFeeds(bgCtx, cacheKey, allFeeds, 1*time.Hour); err != nil && bgCtx.Err() == nil {
 			log.Printf("Error setting feeds: %v", err)
 		}
-	}(cacheKey, allFeeds)
+	})
 
 	w.Header().Set("X-Cache", "MISS")
 	w.WriteHeader(http.StatusOK)

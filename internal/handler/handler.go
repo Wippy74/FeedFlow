@@ -4,6 +4,7 @@ import (
 	"NewsAggregator/internal/model"
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,18 +31,61 @@ type Cache interface {
 }
 
 type Handler struct {
-	storage         Storage
-	cache           Cache
-	idGenerator     func() uuid.UUID
-	apiKeyGenerator func() (string, error)
+	storage          Storage
+	cache            Cache
+	idGenerator      func() uuid.UUID
+	apiKeyGenerator  func() (string, error)
+	backgroundCtx    context.Context
+	cancelBackground context.CancelFunc
+	backgroundMu     sync.Mutex
+	backgroundClosed bool
+	backgroundWG     sync.WaitGroup
 }
 
 func NewHandler(storage Storage, cache Cache) *Handler {
+	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
 	return &Handler{
-		storage:         storage,
-		cache:           cache,
-		idGenerator:     uuid.New,
-		apiKeyGenerator: generateAPIKey,
+		storage:          storage,
+		cache:            cache,
+		idGenerator:      uuid.New,
+		apiKeyGenerator:  generateAPIKey,
+		backgroundCtx:    backgroundCtx,
+		cancelBackground: cancelBackground,
+	}
+}
+
+func (h *Handler) runInBackground(task func(context.Context)) {
+	h.backgroundMu.Lock()
+	if h.backgroundClosed {
+		h.backgroundMu.Unlock()
+		return
+	}
+	h.backgroundWG.Add(1)
+	h.backgroundMu.Unlock()
+
+	go func() {
+		defer h.backgroundWG.Done()
+		task(h.backgroundCtx)
+	}()
+}
+
+func (h *Handler) Shutdown(ctx context.Context) error {
+	h.backgroundMu.Lock()
+	h.backgroundClosed = true
+	h.cancelBackground()
+	h.backgroundMu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		h.backgroundWG.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

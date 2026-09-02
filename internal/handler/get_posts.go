@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -42,11 +42,11 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Cache", "HIT")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(cachedPost); err != nil {
-			log.Printf("error encoding cached posts: %v", err)
+			slog.ErrorContext(ctx, "failed to encode cached posts", "error", err)
 		}
 		return
 	} else if !errors.Is(err, redis.Nil) {
-		log.Printf("error during cache get: %v", err)
+		slog.WarnContext(ctx, "failed to get posts from cache", "user_id", user.ID.String(), "error", err)
 	}
 
 	posts, err := h.storage.GetPosts(r.Context(), user.ID, limit, offset)
@@ -60,12 +60,12 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 
 	h.runInBackground(func(bgCtx context.Context) {
 		if err := h.cache.SetPost(bgCtx, cacheKey, posts, 1*time.Minute); err != nil && bgCtx.Err() == nil {
-			log.Printf("error during cache set: %v", err)
+			slog.WarnContext(bgCtx, "failed to cache posts", "user_id", user.ID.String(), "error", err)
 		}
 	})
 	w.Header().Set("X-Cache", "MISS")
 	w.WriteHeader(http.StatusOK)
 	if err := json.NewEncoder(w).Encode(posts); err != nil {
-		log.Printf("error encoding posts: %v", err)
+		slog.ErrorContext(ctx, "failed to encode posts", "user_id", user.ID.String(), "error", err)
 	}
 }

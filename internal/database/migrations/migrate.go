@@ -3,8 +3,9 @@ package migrations
 import (
 	"embed"
 	"errors"
+	"fmt"
 	"io/fs"
-	"log"
+	"log/slog"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -14,31 +15,32 @@ import (
 //go:embed sql/*.sql
 var embedFS embed.FS
 
-func RunMigrations(dbURL string) {
+func RunMigrations(dbURL string) error {
 	subFS, err := fs.Sub(embedFS, "sql")
 	if err != nil {
-		log.Fatalf("failed to get subdirectory sql: %v", err)
+		return fmt.Errorf("get migrations filesystem: %w", err)
 	}
 
 	sourceDriver, err := iofs.New(subFS, ".")
 	if err != nil {
-		log.Fatalf("failed to create migrations source: %v", err)
+		return fmt.Errorf("create migrations source: %w", err)
 	}
 
 	m, err := migrate.NewWithSourceInstance("iofs", sourceDriver, dbURL)
 	if err != nil {
-		log.Fatalf("failed to create migrate runner: %v", err)
+		return fmt.Errorf("create migration runner: %w", err)
 	}
 
 	err = m.Up()
 
 	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		log.Fatalf("failed to runnig migrations: %v", err)
+		return fmt.Errorf("apply migrations: %w", err)
 	}
 
 	if errors.Is(err, migrate.ErrNoChange) {
-		log.Println("no migrations needed, database is up to date.")
+		slog.Info("database schema is up to date")
 	} else {
-		log.Println("migrations applied")
+		slog.Info("database migrations applied")
 	}
+	return nil
 }

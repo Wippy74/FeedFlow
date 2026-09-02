@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,21 +23,33 @@ import (
 )
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	})))
+
+	if err := run(); err != nil {
+		slog.Error("application stopped with error", "error", err)
+		os.Exit(1)
+	}
+}
+
+func run() (runErr error) {
 	appCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
 
 	cfg, err := config.ReadConfig()
 	if err != nil {
-		log.Fatal(err)
-		return
+		return fmt.Errorf("read config: %w", err)
 	}
 
-	log.Println("Connecting to database")
-	migrations.RunMigrations(cfg.DBUrl)
+	slog.Info("connecting to database")
+	if err := migrations.RunMigrations(cfg.DBUrl); err != nil {
+		return fmt.Errorf("run migrations: %w", err)
+	}
 
 	poolConfig, err := pgxpool.ParseConfig(cfg.DBUrl)
 	if err != nil {
-		log.Fatalf("failed to parse database pool config: %v", err)
+		return fmt.Errorf("parse database pool config: %w", err)
 	}
 	poolConfig.MaxConns = cfg.DBMaxConns
 	poolConfig.MinConns = cfg.DBMinConns
@@ -47,13 +60,12 @@ func main() {
 	dbPool, err := pgxpool.NewWithConfig(connectCtx, poolConfig)
 	if err != nil {
 		cancelConnect()
-		log.Fatalf("failed to create database pool: %v", err)
+		return fmt.Errorf("create database pool: %w", err)
 	}
-
 	if err := dbPool.Ping(connectCtx); err != nil {
 		cancelConnect()
 		dbPool.Close()
-		log.Fatalf("failed to connect to database: %v", err)
+		return fmt.Errorf("ping database: %w", err)
 	}
 	cancelConnect()
 
@@ -63,85 +75,81 @@ func main() {
 		return nil
 	}); err != nil {
 		dbPool.Close()
-		log.Printf("failed to register PostgreSQL pool closer: %v", err)
-		return
+		return fmt.Errorf("register PostgreSQL pool closer: %w", err)
 	}
 	defer func() {
-		if err := resourceCloser.Close(); err != nil {
-			log.Printf("failed to close application resources: %v", err)
-		}
+		runErr = errors.Join(runErr, resourceCloser.Close())
 	}()
-	log.Println("Connected to database")
+	slog.Info("connected to database",
+		"max_connections", cfg.DBMaxConns,
+		"min_connections", cfg.DBMinConns,
+	)
 
 	dbRepo := storage.NewRepository(dbPool)
 	cacheRepo := cache.NewRedisCache(cfg.RedisAddr)
 	if err := resourceCloser.Add("Redis client", cacheRepo.Close); err != nil {
 		_ = cacheRepo.Close()
-		log.Printf("failed to register Redis client closer: %v", err)
-		return
+		return fmt.Errorf("register Redis client closer: %w", err)
 	}
 
 	workerDone := make(chan error, 1)
 	go func() {
-		workerDone <- worker.Start(appCtx, dbRepo, 1*time.Minute, 3)
+		workerDone <- worker.Start(appCtx, dbRepo, time.Minute, 3)
 	}()
 
 	apiHandler := handler.NewHandler(dbRepo, cacheRepo)
-	router := apiHandler.InitRouter()
-	port := ":8080"
 	server := &http.Server{
-		Addr:         port,
-		Handler:      router,
+		Addr:         ":8080",
+		Handler:      apiHandler.InitRouter(),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
-
 	serverDone := make(chan error, 1)
 	go func() {
 		serverDone <- server.ListenAndServe()
 	}()
 
-	log.Printf("Listening on port %s", port)
+	slog.Info("HTTP server started", "address", server.Addr)
 	workerFinished := false
 	select {
 	case <-appCtx.Done():
-		log.Println("Shutdown signal received")
+		slog.Info("shutdown signal received")
 	case err := <-serverDone:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Printf("HTTP server stopped unexpectedly: %v", err)
+			runErr = fmt.Errorf("HTTP server stopped unexpectedly: %w", err)
 		}
 		stopSignals()
 	case err := <-workerDone:
 		workerFinished = true
 		if err != nil {
-			log.Printf("RSS worker stopped unexpectedly: %v", err)
+			runErr = fmt.Errorf("RSS worker stopped unexpectedly: %w", err)
 		}
 		stopSignals()
 	}
 
 	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelShutdown()
-
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Graceful HTTP shutdown failed: %v", err)
+		runErr = errors.Join(runErr, fmt.Errorf("graceful HTTP shutdown: %w", err))
 		if closeErr := server.Close(); closeErr != nil {
-			log.Printf("Forced HTTP shutdown failed: %v", closeErr)
+			runErr = errors.Join(runErr, fmt.Errorf("forced HTTP shutdown: %w", closeErr))
 		}
 	}
 	if err := apiHandler.Shutdown(shutdownCtx); err != nil {
-		log.Printf("Timed out waiting for background cache operations: %v", err)
+		runErr = errors.Join(runErr, fmt.Errorf("stop background cache operations: %w", err))
 	}
 
 	if !workerFinished {
 		select {
 		case err := <-workerDone:
 			if err != nil {
-				log.Printf("RSS worker stopped with error: %v", err)
+				runErr = errors.Join(runErr, fmt.Errorf("stop RSS worker: %w", err))
 			}
 		case <-shutdownCtx.Done():
-			log.Println("Timed out waiting for RSS worker to stop")
+			runErr = errors.Join(runErr, fmt.Errorf("wait for RSS worker: %w", shutdownCtx.Err()))
 		}
 	}
 
-	log.Println("Application stopped")
+	slog.Info("application stopped")
+	return runErr
 }

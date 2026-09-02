@@ -2,7 +2,7 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 )
 
@@ -29,7 +29,7 @@ func (h *Handler) PostFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.cache.Delete(ctx, "feeds:all"); err != nil {
-		log.Printf("Failed to delete cache: %v", err)
+		slog.WarnContext(ctx, "failed to invalidate feeds cache", "feed_id", savedFeed.ID.String(), "error", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

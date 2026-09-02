@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -38,7 +38,7 @@ func (h *Handler) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			next(w, r.WithContext(ctx))
 			return
 		} else if !errors.Is(err, redis.Nil) {
-			log.Printf("Error getting user from cache: %v", err)
+			slog.WarnContext(ctx, "failed to get user from cache", "error", err)
 		}
 
 		user, err = h.storage.GetUserByApiKey(ctx, apiKey)
@@ -49,7 +49,7 @@ func (h *Handler) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		h.runInBackground(func(bgCtx context.Context) {
 			if err := h.cache.SetUser(bgCtx, cacheKey, user, 15*time.Minute); err != nil && bgCtx.Err() == nil {
-				log.Printf("Error setting user to cache: %v", err)
+				slog.WarnContext(bgCtx, "failed to cache user", "user_id", user.ID.String(), "error", err)
 			}
 		})
 

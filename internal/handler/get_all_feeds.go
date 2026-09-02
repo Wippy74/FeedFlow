@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -24,11 +24,11 @@ func (h *Handler) GetAllFeeds(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Cache", "HIT")
 		w.WriteHeader(http.StatusOK)
 		if err := json.NewEncoder(w).Encode(allFeeds); err != nil {
-			log.Printf("error encoding cached feeds: %v", err)
+			slog.ErrorContext(ctx, "failed to encode cached feeds", "error", err)
 		}
 		return
 	} else if !errors.Is(err, redis.Nil) {
-		log.Printf("Error getting all feeds: %v", err)
+		slog.WarnContext(ctx, "failed to get feeds from cache", "error", err)
 	}
 
 	allFeeds, err = h.storage.GetAllFeeds(ctx)
@@ -42,7 +42,7 @@ func (h *Handler) GetAllFeeds(w http.ResponseWriter, r *http.Request) {
 
 	h.runInBackground(func(bgCtx context.Context) {
 		if err := h.cache.SetFeeds(bgCtx, cacheKey, allFeeds, 1*time.Hour); err != nil && bgCtx.Err() == nil {
-			log.Printf("Error setting feeds: %v", err)
+			slog.WarnContext(bgCtx, "failed to cache feeds", "error", err)
 		}
 	})
 

@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"NewsAggregator/internal/model"
 	"context"
 	"encoding/json"
 	"errors"
@@ -10,6 +9,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"NewsAggregator/internal/model"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -64,5 +65,7 @@ func (h *Handler) GetPosts(w http.ResponseWriter, r *http.Request) {
 	})
 	w.Header().Set("X-Cache", "MISS")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(posts)
+	if err := json.NewEncoder(w).Encode(posts); err != nil {
+		log.Printf("error encoding posts: %v", err)
+	}
 }

@@ -1,13 +1,6 @@
 package main
 
 import (
-	cache "NewsAggregator/internal/cache"
-	"NewsAggregator/internal/closer"
-	"NewsAggregator/internal/config"
-	"NewsAggregator/internal/database/migrations"
-	"NewsAggregator/internal/database/storage"
-	"NewsAggregator/internal/handler"
-	"NewsAggregator/internal/worker"
 	"context"
 	"errors"
 	"log"
@@ -16,6 +9,14 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	cache "NewsAggregator/internal/cache"
+	"NewsAggregator/internal/closer"
+	"NewsAggregator/internal/config"
+	"NewsAggregator/internal/database/migrations"
+	"NewsAggregator/internal/database/storage"
+	"NewsAggregator/internal/handler"
+	"NewsAggregator/internal/worker"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

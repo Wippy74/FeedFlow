@@ -19,7 +19,7 @@ func (h *Handler) PostUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid request payload", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	apiKey, err := h.apiKeyGenerator()
 	if err != nil {

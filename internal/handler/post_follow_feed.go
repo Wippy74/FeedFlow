@@ -1,9 +1,10 @@
 package handler
 
 import (
-	"NewsAggregator/internal/model"
 	"encoding/json"
 	"net/http"
+
+	"NewsAggregator/internal/model"
 
 	"github.com/google/uuid"
 )
@@ -19,7 +20,7 @@ func (h *Handler) PostFollowFeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	user, ok := ctx.Value(userContextKey).(model.User)
 	if !ok {

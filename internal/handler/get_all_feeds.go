@@ -1,13 +1,14 @@
 package handler
 
 import (
-	"NewsAggregator/internal/model"
 	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
 	"time"
+
+	"NewsAggregator/internal/model"
 
 	"github.com/redis/go-redis/v9"
 )
@@ -22,7 +23,9 @@ func (h *Handler) GetAllFeeds(w http.ResponseWriter, r *http.Request) {
 	if err == nil {
 		w.Header().Set("X-Cache", "HIT")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(allFeeds)
+		if err := json.NewEncoder(w).Encode(allFeeds); err != nil {
+			log.Printf("error encoding cached feeds: %v", err)
+		}
 		return
 	} else if !errors.Is(err, redis.Nil) {
 		log.Printf("Error getting all feeds: %v", err)

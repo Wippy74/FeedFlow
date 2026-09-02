@@ -20,7 +20,7 @@ func (h *Handler) PostFeed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
+	defer func() { _ = r.Body.Close() }()
 
 	savedFeed, err := h.storage.AddFeed(ctx, h.idGenerator(), params.Name, params.Url)
 	if err != nil {

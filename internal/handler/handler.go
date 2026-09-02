@@ -1,11 +1,12 @@
 package handler
 
 import (
-	"NewsAggregator/internal/model"
 	"context"
 	"net/http"
 	"sync"
 	"time"
+
+	"NewsAggregator/internal/model"
 
 	"github.com/google/uuid"
 )

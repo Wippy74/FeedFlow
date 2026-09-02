@@ -1,10 +1,11 @@
 package cache
 
 import (
-	"NewsAggregator/internal/model"
 	"context"
 	"encoding/json"
 	"time"
+
+	"NewsAggregator/internal/model"
 
 	"github.com/redis/go-redis/v9"
 )

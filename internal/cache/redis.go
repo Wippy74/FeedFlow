@@ -82,3 +82,7 @@ func (c *RedisCache) GetFeeds(ctx context.Context, key string) ([]model.Feed, er
 func (c *RedisCache) Delete(ctx context.Context, key string) error {
 	return c.client.Del(ctx, key).Err()
 }
+
+func (c *RedisCache) Close() error {
+	return c.client.Close()
+}

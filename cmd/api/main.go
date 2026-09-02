@@ -1,7 +1,8 @@
 package main
 
 import (
-	cache2 "NewsAggregator/internal/cache"
+	cache "NewsAggregator/internal/cache"
+	"NewsAggregator/internal/closer"
 	"NewsAggregator/internal/config"
 	"NewsAggregator/internal/database/migrations"
 	"NewsAggregator/internal/database/storage"
@@ -11,12 +12,18 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
+	appCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stopSignals()
+
 	cfg, err := config.ReadConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -35,7 +42,7 @@ func main() {
 	poolConfig.MaxConnLifetime = cfg.DBMaxConnLifetime
 	poolConfig.MaxConnIdleTime = cfg.DBMaxConnIdleTime
 
-	connectCtx, cancelConnect := context.WithTimeout(context.Background(), 10*time.Second)
+	connectCtx, cancelConnect := context.WithTimeout(appCtx, 10*time.Second)
 	dbPool, err := pgxpool.NewWithConfig(connectCtx, poolConfig)
 	if err != nil {
 		cancelConnect()
@@ -48,19 +55,37 @@ func main() {
 		log.Fatalf("failed to connect to database: %v", err)
 	}
 	cancelConnect()
-	defer dbPool.Close()
-	log.Println("Connected to database")
 
-	repo := storage.NewRepository(dbPool)
-	cache := cache2.NewRedisCache(cfg.RedisAddr)
-	go func() {
-		err := worker.Start(repo, 1*time.Minute, 3)
-		if err != nil {
-			log.Fatal(err)
+	resourceCloser := closer.New()
+	if err := resourceCloser.Add("PostgreSQL pool", func() error {
+		dbPool.Close()
+		return nil
+	}); err != nil {
+		dbPool.Close()
+		log.Printf("failed to register PostgreSQL pool closer: %v", err)
+		return
+	}
+	defer func() {
+		if err := resourceCloser.Close(); err != nil {
+			log.Printf("failed to close application resources: %v", err)
 		}
 	}()
+	log.Println("Connected to database")
 
-	apiHandler := handler.NewHandler(repo, cache)
+	dbRepo := storage.NewRepository(dbPool)
+	cacheRepo := cache.NewRedisCache(cfg.RedisAddr)
+	if err := resourceCloser.Add("Redis client", cacheRepo.Close); err != nil {
+		_ = cacheRepo.Close()
+		log.Printf("failed to register Redis client closer: %v", err)
+		return
+	}
+
+	workerDone := make(chan error, 1)
+	go func() {
+		workerDone <- worker.Start(appCtx, dbRepo, 1*time.Minute, 3)
+	}()
+
+	apiHandler := handler.NewHandler(dbRepo, cacheRepo)
 	router := apiHandler.InitRouter()
 	port := ":8080"
 	server := &http.Server{
@@ -70,8 +95,52 @@ func main() {
 		WriteTimeout: 10 * time.Second,
 	}
 
+	serverDone := make(chan error, 1)
+	go func() {
+		serverDone <- server.ListenAndServe()
+	}()
+
 	log.Printf("Listening on port %s", port)
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("Error during server running: %v", err)
+	workerFinished := false
+	select {
+	case <-appCtx.Done():
+		log.Println("Shutdown signal received")
+	case err := <-serverDone:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Printf("HTTP server stopped unexpectedly: %v", err)
+		}
+		stopSignals()
+	case err := <-workerDone:
+		workerFinished = true
+		if err != nil {
+			log.Printf("RSS worker stopped unexpectedly: %v", err)
+		}
+		stopSignals()
 	}
+
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
+
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Graceful HTTP shutdown failed: %v", err)
+		if closeErr := server.Close(); closeErr != nil {
+			log.Printf("Forced HTTP shutdown failed: %v", closeErr)
+		}
+	}
+	if err := apiHandler.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Timed out waiting for background cache operations: %v", err)
+	}
+
+	if !workerFinished {
+		select {
+		case err := <-workerDone:
+			if err != nil {
+				log.Printf("RSS worker stopped with error: %v", err)
+			}
+		case <-shutdownCtx.Done():
+			log.Println("Timed out waiting for RSS worker to stop")
+		}
+	}
+
+	log.Println("Application stopped")
 }

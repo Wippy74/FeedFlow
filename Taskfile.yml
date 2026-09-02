@@ -1,0 +1,60 @@
+version: "3"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  fmt:
+    desc: Format Go source files
+    cmds:
+      - golangci-lint fmt ./...
+
+  fmt:check:
+    desc: Check Go source formatting without changing files
+    cmds:
+      - golangci-lint fmt --diff ./...
+
+  lint:
+    desc: Run static analysis
+    cmds:
+      - golangci-lint run ./...
+
+  test:
+    desc: Run all tests
+    cmds:
+      - go test ./...
+
+  test:race:
+    desc: Run all tests with the race detector
+    cmds:
+      - go test -race ./...
+
+  build:
+    desc: Build the API binary
+    cmds:
+      - go build -o bin/api ./cmd/api
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - bin/api
+
+  run:
+    desc: Run the API locally
+    cmds:
+      - go run ./cmd/api
+
+  tidy:
+    desc: Synchronize Go module dependencies
+    cmds:
+      - go mod tidy
+
+  check:
+    desc: Run formatting, lint, and test checks
+    deps:
+      - fmt:check
+      - lint
+      - test

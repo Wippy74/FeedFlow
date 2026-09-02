@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -29,11 +28,9 @@ func (h *Handler) PostFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
-		if err := h.cache.Delete(context.Background(), "feeds:all"); err != nil {
-			log.Printf("Failed to delete cache: %v", err)
-		}
-	}()
+	if err := h.cache.Delete(ctx, "feeds:all"); err != nil {
+		log.Printf("Failed to delete cache: %v", err)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

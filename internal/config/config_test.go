@@ -69,12 +69,12 @@ func TestReadConfig(t *testing.T) {
 				"DB_MAX_CONN_LIFETIME", "DB_MAX_CONN_IDLE_TIME",
 			}
 			for _, k := range envVars {
-				os.Unsetenv(k)
+				_ = os.Unsetenv(k)
 			}
 
 			err := os.WriteFile(".env", []byte(tt.envContent), 0644)
 			require.NoError(t, err)
-			defer os.Remove(".env")
+			defer func() { _ = os.Remove(".env") }()
 
 			cfg, err := ReadConfig()
 
@@ -107,12 +107,12 @@ func TestReadConfig(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			envVars := []string{"DB_MAX_CONNS", "DB_MIN_CONNS", "DB_MAX_CONN_LIFETIME", "DB_MAX_CONN_IDLE_TIME"}
 			for _, key := range envVars {
-				os.Unsetenv(key)
+				_ = os.Unsetenv(key)
 			}
 
 			err := os.WriteFile(".env", []byte(tt.poolConfig), 0644)
 			require.NoError(t, err)
-			defer os.Remove(".env")
+			defer func() { _ = os.Remove(".env") }()
 
 			cfg, err := ReadConfig()
 			require.Error(t, err)
@@ -121,7 +121,7 @@ func TestReadConfig(t *testing.T) {
 	}
 
 	t.Run("Missing .env file", func(t *testing.T) {
-		os.Remove(".env")
+		_ = os.Remove(".env")
 		cfg, err := ReadConfig()
 		require.Error(t, err)
 		require.Nil(t, cfg)

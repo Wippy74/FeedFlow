@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"NewsAggregator/internal/model"
+	"FeedFlow/internal/model"
 
 	"github.com/google/uuid"
 )

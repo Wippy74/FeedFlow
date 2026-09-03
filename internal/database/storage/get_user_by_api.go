@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 
-	"NewsAggregator/internal/model"
+	"FeedFlow/internal/model"
 )
 
 func (repo *Repository) GetUserByApiKey(ctx context.Context, apiKey string) (model.User, error) {

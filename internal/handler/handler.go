@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"NewsAggregator/internal/model"
+	"FeedFlow/internal/model"
 
 	"github.com/google/uuid"
 )

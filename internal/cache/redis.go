@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"NewsAggregator/internal/model"
+	"FeedFlow/internal/model"
 
 	"github.com/redis/go-redis/v9"
 )

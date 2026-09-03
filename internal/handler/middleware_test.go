@@ -1,11 +1,12 @@
 package handler
 
 import (
-	"NewsAggregator/internal/model"
 	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"FeedFlow/internal/model"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"

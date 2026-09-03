@@ -11,13 +11,13 @@ import (
 	"syscall"
 	"time"
 
-	cache "NewsAggregator/internal/cache"
-	"NewsAggregator/internal/closer"
-	"NewsAggregator/internal/config"
-	"NewsAggregator/internal/database/migrations"
-	"NewsAggregator/internal/database/storage"
-	"NewsAggregator/internal/handler"
-	"NewsAggregator/internal/worker"
+	cache "FeedFlow/internal/cache"
+	"FeedFlow/internal/closer"
+	"FeedFlow/internal/config"
+	"FeedFlow/internal/database/migrations"
+	"FeedFlow/internal/database/storage"
+	"FeedFlow/internal/handler"
+	"FeedFlow/internal/worker"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )

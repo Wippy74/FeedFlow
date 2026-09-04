@@ -13,6 +13,7 @@ type Repository interface {
 	CreateDeliveries(ctx context.Context, event notification.Event) error
 	MarkEventProcessed(ctx context.Context, eventID uuid.UUID) error
 
+	ExpandPostCreatedEvents(ctx context.Context, limit int) (int64, error)
 	ClaimDeliveries(ctx context.Context, limit int) ([]notification.Delivery, error)
 	MarkDeliverySent(ctx context.Context, id uuid.UUID) error
 	ScheduleDeliveryRetry(ctx context.Context, id uuid.UUID, availableAt time.Time, reason string) error

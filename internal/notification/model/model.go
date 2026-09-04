@@ -6,6 +6,10 @@ import (
 	"github.com/google/uuid"
 )
 
+type EventType string
+
+const EventPostCreated EventType = "post.created"
+
 type ChannelType string
 
 const (

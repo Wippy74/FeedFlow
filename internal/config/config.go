@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -28,7 +29,7 @@ const (
 
 func ReadConfig() (*Config, error) {
 	err := godotenv.Load()
-	if err != nil {
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("error loading .env file: %w", err)
 	}
 	dbUser := os.Getenv("DB_USER")

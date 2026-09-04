@@ -1,0 +1,10 @@
+.git
+.github
+.idea
+.env
+bin
+coverage.out
+*.test
+*.prof
+Dockerfile*
+docker-compose*.yml

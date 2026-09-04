@@ -122,8 +122,18 @@ func TestReadConfig(t *testing.T) {
 
 	t.Run("Missing .env file", func(t *testing.T) {
 		_ = os.Remove(".env")
+		envVars := []string{
+			"DB_USER", "DB_PASSWORD", "DB_NAME", "DB_HOST", "DB_PORT",
+			"REDIS_HOST", "REDIS_PORT", "DB_MAX_CONNS", "DB_MIN_CONNS",
+			"DB_MAX_CONN_LIFETIME", "DB_MAX_CONN_IDLE_TIME",
+		}
+		for _, key := range envVars {
+			_ = os.Unsetenv(key)
+		}
 		cfg, err := ReadConfig()
-		require.Error(t, err)
-		require.Nil(t, cfg)
+		require.NoError(t, err)
+		require.NotNil(t, cfg)
+		assert.Equal(t, defaultDBMaxConns, cfg.DBMaxConns)
+		assert.Equal(t, defaultDBMinConns, cfg.DBMinConns)
 	})
 }

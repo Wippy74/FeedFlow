@@ -35,7 +35,7 @@ type Channel struct {
 }
 type Event struct {
 	ID          uuid.UUID
-	Type        string
+	Type        EventType
 	AggregateID uuid.UUID
 	Payload     json.RawMessage
 	Attempts    int
@@ -55,4 +55,9 @@ type Message struct {
 	Title     string
 	Body      string
 	URL       string
+}
+
+type DeliveryTask struct {
+	Delivery Delivery
+	Message  Message
 }

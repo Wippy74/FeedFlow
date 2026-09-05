@@ -11,7 +11,7 @@ CREATE TABLE notification_channels (
 
 CREATE TABLE outbox_events (
     id UUID PRIMARY KEY,
-    event_type UUID NOT NULL,
+    event_type TEXT NOT NULL,
     aggregate_id UUID NOT NULL,
     payload JSONB NOT NULL,
     created_at TIMESTAMPTZ NOT NULL,
@@ -25,7 +25,7 @@ CREATE INDEX idx_outbox_pending
     WHERE processed_at IS NULL;
 
 CREATE TABLE notification_deliveries (
-    id UUID PRIMARY KEY,
+    id UUID PRIMARY KEY DEFAULT get_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     channel_id UUID NOT NULL REFERENCES notification_channels(id) ON DELETE CASCADE,

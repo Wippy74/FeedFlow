@@ -1,6 +1,7 @@
 package main
 
 import (
+	notificationpostgres "FeedFlow/internal/notification/postgres"
 	"context"
 	"errors"
 	"fmt"
@@ -69,6 +70,8 @@ func run() (runErr error) {
 	}
 	cancelConnect()
 
+	notificationRepo := notificationpostgres.NewRepository(dbPool)
+
 	resourceCloser := closer.New()
 	if err := resourceCloser.Add("PostgreSQL pool", func() error {
 		dbPool.Close()
@@ -97,7 +100,7 @@ func run() (runErr error) {
 		workerDone <- worker.Start(appCtx, dbRepo, time.Minute, 3)
 	}()
 
-	apiHandler := handler.NewHandler(dbRepo, cacheRepo)
+	apiHandler := handler.NewHandler(dbRepo, cacheRepo, notificationRepo)
 	server := &http.Server{
 		Addr:         ":8080",
 		Handler:      apiHandler.InitRouter(),

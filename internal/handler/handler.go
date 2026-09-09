@@ -31,26 +31,28 @@ type Cache interface {
 }
 
 type Handler struct {
-	storage          Storage
-	cache            Cache
-	idGenerator      func() uuid.UUID
-	apiKeyGenerator  func() (string, error)
-	backgroundCtx    context.Context
-	cancelBackground context.CancelFunc
-	backgroundMu     sync.Mutex
-	backgroundClosed bool
-	backgroundWG     sync.WaitGroup
+	storage              Storage
+	cache                Cache
+	notificationChannels NotificationChannelStorage
+	idGenerator          func() uuid.UUID
+	apiKeyGenerator      func() (string, error)
+	backgroundCtx        context.Context
+	cancelBackground     context.CancelFunc
+	backgroundMu         sync.Mutex
+	backgroundClosed     bool
+	backgroundWG         sync.WaitGroup
 }
 
-func NewHandler(storage Storage, cache Cache) *Handler {
+func NewHandler(storage Storage, cache Cache, notificationChannels NotificationChannelStorage) *Handler {
 	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
 	return &Handler{
-		storage:          storage,
-		cache:            cache,
-		idGenerator:      uuid.New,
-		apiKeyGenerator:  generateAPIKey,
-		backgroundCtx:    backgroundCtx,
-		cancelBackground: cancelBackground,
+		storage:              storage,
+		cache:                cache,
+		notificationChannels: notificationChannels,
+		idGenerator:          uuid.New,
+		apiKeyGenerator:      generateAPIKey,
+		backgroundCtx:        backgroundCtx,
+		cancelBackground:     cancelBackground,
 	}
 }
 
@@ -98,5 +100,9 @@ func (h *Handler) InitRouter() *http.ServeMux {
 	router.HandleFunc("POST /v1/feed_follows", h.AuthMiddleware(h.PostFollowFeed))
 	router.HandleFunc("GET /v1/posts", h.AuthMiddleware(h.GetPosts))
 
+	router.HandleFunc("POST /v1/notification-channel", h.AuthMiddleware(h.PostNotificationChannel))
+	router.HandleFunc("GET /v1/notification-channel", h.AuthMiddleware(h.GetNotificationChannel))
+	router.HandleFunc("PATCH /v1/notification-channel", h.AuthMiddleware(h.PatchNotificationChannel))
+	router.HandleFunc("DELETE /v1/notification-channel", h.AuthMiddleware(h.DeleteNotificationChannel))
 	return router
 }

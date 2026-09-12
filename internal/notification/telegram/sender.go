@@ -30,8 +30,6 @@ type Sender struct {
 	apiBaseURL string
 }
 
-//kubernetik
-
 type APIError struct {
 	HTTPStatus  int
 	Code        int
@@ -51,6 +49,10 @@ func (e *APIError) Retryable() bool {
 		e.HTTPStatus >= http.StatusInternalServerError ||
 		e.Code == http.StatusTooManyRequests ||
 		e.Code >= http.StatusInternalServerError
+}
+
+func (e *APIError) RetryDelay() time.Duration {
+	return e.RetryAfter
 }
 
 type TransportError struct {

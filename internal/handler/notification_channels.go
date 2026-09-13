@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	"FeedFlow/internal/model"
-	"FeedFlow/internal/notification/model"
+	notification "FeedFlow/internal/notification/model"
 
 	"github.com/google/uuid"
 )

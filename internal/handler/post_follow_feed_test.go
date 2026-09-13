@@ -25,7 +25,7 @@ func TestPostFollowFeedUsesAuthenticatedUser(t *testing.T) {
 			assert.Equal(t, feedID, gotFeedID)
 			return nil
 		},
-	}, &MockCache{})
+	}, &MockCache{}, &MockNotificationChannelStorage{})
 
 	body := bytes.NewBufferString(`{"userId":"` + requestUserID.String() + `","feedId":"` + feedID.String() + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/feed_follows", body)

@@ -9,7 +9,7 @@ import (
 )
 
 func TestShutdownCancelsAndWaitsForBackgroundTasks(t *testing.T) {
-	h := NewHandler(&MockStorage{}, &MockCache{})
+	h := NewHandler(&MockStorage{}, &MockCache{}, &MockNotificationChannelStorage{})
 	started := make(chan struct{})
 	finished := make(chan struct{})
 

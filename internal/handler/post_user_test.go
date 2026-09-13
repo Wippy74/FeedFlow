@@ -27,7 +27,7 @@ func TestPostUserGeneratesIDAndAPIKeyOnServer(t *testing.T) {
 			assert.Equal(t, serverAPIKey, apiKey)
 			return model.User{ID: id, Name: name, ApiKey: apiKey}, nil
 		},
-	}, &MockCache{})
+	}, &MockCache{}, &MockNotificationChannelStorage{})
 	h.idGenerator = func() uuid.UUID { return serverID }
 	h.apiKeyGenerator = func() (string, error) { return serverAPIKey, nil }
 
@@ -56,7 +56,7 @@ func TestPostUserRejectsClientGeneratedCredentials(t *testing.T) {
 				t.Fatal("storage must not be called when request contains server-managed fields")
 				return model.User{}, nil
 			},
-		}, &MockCache{})
+		}, &MockCache{}, &MockNotificationChannelStorage{})
 		req := httptest.NewRequest(http.MethodPost, "/v1/users", bytes.NewBufferString(body))
 		rr := httptest.NewRecorder()
 
@@ -72,7 +72,7 @@ func TestPostUserRejectsInvalidPayload(t *testing.T) {
 			t.Fatal("storage must not be called for an invalid payload")
 			return model.User{}, nil
 		},
-	}, &MockCache{})
+	}, &MockCache{}, &MockNotificationChannelStorage{})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/users", bytes.NewBufferString("invalid json"))
 	rr := httptest.NewRecorder()
@@ -88,7 +88,7 @@ func TestPostUserHandlesAPIKeyGenerationFailure(t *testing.T) {
 			t.Fatal("storage must not be called when API key generation fails")
 			return model.User{}, nil
 		},
-	}, &MockCache{})
+	}, &MockCache{}, &MockNotificationChannelStorage{})
 	h.apiKeyGenerator = func() (string, error) { return "", errors.New("random source unavailable") }
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/users", bytes.NewBufferString(`{"name":"Test User"}`))
@@ -104,7 +104,7 @@ func TestPostUserHandlesStorageFailure(t *testing.T) {
 		SaveUserFn: func(context.Context, uuid.UUID, string, string) (model.User, error) {
 			return model.User{}, errors.New("db error")
 		},
-	}, &MockCache{})
+	}, &MockCache{}, &MockNotificationChannelStorage{})
 
 	req := httptest.NewRequest(http.MethodPost, "/v1/users", bytes.NewBufferString(`{"name":"Test User"}`))
 	rr := httptest.NewRecorder()

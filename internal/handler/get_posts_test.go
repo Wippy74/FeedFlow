@@ -28,7 +28,7 @@ func TestGetPostsReturnsImmediatelyOnCacheHit(t *testing.T) {
 			assert.Equal(t, "posts:user:"+user.ID.String()+":limit:10:offset:0", key)
 			return wantPosts, nil
 		},
-	})
+	}, &MockNotificationChannelStorage{})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
 	req = req.WithContext(context.WithValue(req.Context(), userContextKey, user))

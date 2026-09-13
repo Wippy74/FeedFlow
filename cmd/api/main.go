@@ -15,7 +15,6 @@ import (
 	cache "FeedFlow/internal/cache"
 	"FeedFlow/internal/closer"
 	"FeedFlow/internal/config"
-	"FeedFlow/internal/database/migrations"
 	"FeedFlow/internal/database/storage"
 	"FeedFlow/internal/handler"
 	"FeedFlow/internal/worker"
@@ -44,10 +43,6 @@ func run() (runErr error) {
 	}
 
 	slog.Info("connecting to database")
-	if err := migrations.RunMigrations(cfg.DBUrl); err != nil {
-		return fmt.Errorf("run migrations: %w", err)
-	}
-
 	poolConfig, err := pgxpool.ParseConfig(cfg.DBUrl)
 	if err != nil {
 		return fmt.Errorf("parse database pool config: %w", err)

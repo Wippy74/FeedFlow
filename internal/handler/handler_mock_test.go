@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"FeedFlow/internal/model"
+	notification "FeedFlow/internal/notification/model"
 
 	"github.com/google/uuid"
 )
@@ -123,6 +124,41 @@ func (m *MockCache) GetFeeds(ctx context.Context, key string) ([]model.Feed, err
 func (m *MockCache) Delete(ctx context.Context, key string) error {
 	if m.DeleteFn != nil {
 		return m.DeleteFn(ctx, key)
+	}
+	return nil
+}
+
+type MockNotificationChannelStorage struct {
+	CreateChannelFn     func(ctx context.Context, channel notification.Channel) (notification.Channel, error)
+	GetChannelsFn       func(ctx context.Context, userID uuid.UUID) ([]notification.Channel, error)
+	SetChannelEnabledFn func(ctx context.Context, userID, channelID uuid.UUID, enabled bool) (notification.Channel, error)
+	DeleteChannelFn     func(ctx context.Context, userID, channelID uuid.UUID) error
+}
+
+func (m *MockNotificationChannelStorage) CreateChannel(ctx context.Context, channel notification.Channel) (notification.Channel, error) {
+	if m.CreateChannelFn != nil {
+		return m.CreateChannelFn(ctx, channel)
+	}
+	return notification.Channel{}, nil
+}
+
+func (m *MockNotificationChannelStorage) GetChannels(ctx context.Context, userID uuid.UUID) ([]notification.Channel, error) {
+	if m.GetChannelsFn != nil {
+		return m.GetChannelsFn(ctx, userID)
+	}
+	return []notification.Channel{}, nil
+}
+
+func (m *MockNotificationChannelStorage) SetChannelEnabled(ctx context.Context, userID uuid.UUID, channelID uuid.UUID, enabled bool) (notification.Channel, error) {
+	if m.SetChannelEnabledFn != nil {
+		return m.SetChannelEnabledFn(ctx, userID, channelID, enabled)
+	}
+	return notification.Channel{}, nil
+}
+
+func (m *MockNotificationChannelStorage) DeleteChannel(ctx context.Context, userID uuid.UUID, channelID uuid.UUID) error {
+	if m.DeleteChannelFn != nil {
+		return m.DeleteChannelFn(ctx, userID, channelID)
 	}
 	return nil
 }

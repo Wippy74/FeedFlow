@@ -29,7 +29,7 @@ func TestPostFeedGeneratesIDOnServer(t *testing.T) {
 			cacheDeleted = true
 			return nil
 		},
-	})
+	}, &MockNotificationChannelStorage{})
 	h.idGenerator = func() uuid.UUID { return serverID }
 
 	body := bytes.NewBufferString(`{"name":"Example","url":"https://example.com/rss"}`)
@@ -48,7 +48,7 @@ func TestPostFeedRejectsClientGeneratedID(t *testing.T) {
 			t.Fatal("storage must not be called when request contains a server-managed ID")
 			return model.Feed{}, nil
 		},
-	}, &MockCache{})
+	}, &MockCache{}, &MockNotificationChannelStorage{})
 
 	body := bytes.NewBufferString(`{"id":"` + uuid.New().String() + `","name":"Example","url":"https://example.com/rss"}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/feeds", body)

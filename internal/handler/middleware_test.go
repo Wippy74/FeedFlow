@@ -39,7 +39,7 @@ func TestAuthMiddlewareRejectsMalformedHeaders(t *testing.T) {
 					cacheCalled = true
 					return model.User{}, nil
 				},
-			})
+			}, &MockNotificationChannelStorage{})
 
 			req := httptest.NewRequest(http.MethodGet, "/", nil)
 			if tt.header != "" {
@@ -71,7 +71,7 @@ func TestAuthMiddlewareUsesCachedUser(t *testing.T) {
 			assert.Equal(t, "auth:apikey:secret", key)
 			return wantUser, nil
 		},
-	})
+	}, &MockNotificationChannelStorage{})
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
 	req.Header.Set("Authorization", "  ApiKey   secret  ")

@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"FeedFlow/internal/model"
-	"FeedFlow/internal/notification/model"
 	"context"
 	"encoding/json"
 	"errors"
@@ -11,6 +9,9 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"FeedFlow/internal/model"
+	notification "FeedFlow/internal/notification/model"
 
 	"github.com/google/uuid"
 )

@@ -11,7 +11,7 @@ import (
 func (repo *Repository) ExpandPostCreatedEvents(ctx context.Context, limit int) (processed int64, resultErr error) {
 	query := `WITH claimed AS MATERIALIZED (
 		SELECT oe.id, oe.aggregate_id FROM outbox_events AS oe
-		WHERE oe.processed_at IS NULL AND oe.available <= NOW() AND oe.event_type = $1
+		WHERE oe.processed_at IS NULL AND oe.available_at <= NOW() AND oe.event_type = $1
 		ORDER BY oe.created_at, oe.id
 		LIMIT $2
 		FOR UPDATE OF oe SKIP LOCKED

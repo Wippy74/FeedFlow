@@ -102,7 +102,7 @@ func (h *Handler) InitRouter() *http.ServeMux {
 
 	router.HandleFunc("POST /v1/notification-channel", h.AuthMiddleware(h.PostNotificationChannel))
 	router.HandleFunc("GET /v1/notification-channel", h.AuthMiddleware(h.GetNotificationChannel))
-	router.HandleFunc("PATCH /v1/notification-channel", h.AuthMiddleware(h.PatchNotificationChannel))
-	router.HandleFunc("DELETE /v1/notification-channel", h.AuthMiddleware(h.DeleteNotificationChannel))
+	router.HandleFunc("PATCH /v1/notification-channel/{channelID}", h.AuthMiddleware(h.PatchNotificationChannel))
+	router.HandleFunc("DELETE /v1/notification-channel/{channelID}", h.AuthMiddleware(h.DeleteNotificationChannel))
 	return router
 }

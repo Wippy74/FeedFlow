@@ -13,10 +13,10 @@ import (
 
 	"FeedFlow/internal/auth"
 	"FeedFlow/internal/model"
-	notification "FeedFlow/internal/notification/model"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,20 +41,20 @@ func TestTokenExchangeAndProtectedRoute(t *testing.T) {
 	userID := uuid.New()
 	lookups := 0
 	h := NewHandler(&MockStorage{
+		GetPostsFn: func(_ context.Context, id uuid.UUID, _, _ int) ([]model.Post, error) {
+			assert.Equal(t, userID, id)
+			return nil, nil
+		},
 		GetUserByApiKeyFn: func(_ context.Context, value string) (model.User, error) {
 			lookups++
 			assert.Equal(t, "test-key", value)
 			return model.User{ID: userID, Name: "test user", ApiKey: "test-key"}, nil
 		},
 	}, &MockCache{
+		GetPostFn: func(context.Context, string) ([]model.Post, error) { return nil, redis.Nil },
 		GetUserFn: func(context.Context, string) (model.User, error) {
 			t.Fatal("token authentication must not use the credential cache")
 			return model.User{}, nil
-		},
-	}, &MockNotificationChannelStorage{
-		GetChannelsFn: func(_ context.Context, id uuid.UUID) ([]notification.Channel, error) {
-			assert.Equal(t, userID, id)
-			return nil, nil
 		},
 	}, WithTokens(issuer, verifier))
 	t.Cleanup(func() { require.NoError(t, h.Shutdown(context.Background())) })
@@ -74,7 +74,7 @@ func TestTokenExchangeAndProtectedRoute(t *testing.T) {
 	gotID, err := verifier.Verify(token.AccessToken)
 	require.NoError(t, err)
 	assert.Equal(t, userID, gotID)
-	request = httptest.NewRequest(http.MethodGet, "/v1/notification-channel", nil)
+	request = httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
 	request.Header.Set("Authorization", "Bearer "+token.AccessToken)
 	response = httptest.NewRecorder()
 	router.ServeHTTP(response, request)
@@ -109,7 +109,7 @@ func TestTokenExchangeErrors(t *testing.T) {
 			h := NewHandler(&MockStorage{GetUserByApiKeyFn: func(context.Context, string) (model.User, error) {
 				lookups++
 				return tt.user, tt.err
-			}}, &MockCache{}, &MockNotificationChannelStorage{}, WithTokens(tt.issuer, nil))
+			}}, &MockCache{}, WithTokens(tt.issuer, nil))
 			t.Cleanup(func() { require.NoError(t, h.Shutdown(context.Background())) })
 			request := httptest.NewRequest(http.MethodPost, "/v1/auth/token", nil)
 			if tt.header != "" {
@@ -120,6 +120,10 @@ func TestTokenExchangeErrors(t *testing.T) {
 			assert.Equal(t, tt.status, response.Code)
 			assert.Equal(t, tt.lookups, lookups)
 			assert.NotContains(t, response.Body.String(), "secret")
+			assert.Equal(t, "application/json", response.Header().Get("Content-Type"))
+			var payload map[string]any
+			require.NoError(t, json.Unmarshal(response.Body.Bytes(), &payload))
+			assert.Contains(t, payload, "error")
 			assert.Equal(t, "no-store", response.Header().Get("Cache-Control"))
 		})
 	}

@@ -2,58 +2,49 @@ package handler
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/redis/go-redis/v9"
+	"FeedFlow/internal/model"
+
+	"github.com/google/uuid"
 )
 
 type contextKey string
 
 const userContextKey = contextKey("user")
 
+func authorizationCredential(r *http.Request, scheme string) (string, bool) {
+	values := r.Header.Values("Authorization")
+	if len(values) != 1 {
+		return "", false
+	}
+	parts := strings.Fields(values[0])
+	if len(parts) != 2 || !strings.EqualFold(parts[0], scheme) || len(parts[1]) > 8192 {
+		return "", false
+	}
+	return parts[1], true
+}
+
 func (h *Handler) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		authHeader := r.Header.Get("Authorization")
-		if authHeader == "" {
-			http.Error(w, "Empty Authorization header", http.StatusUnauthorized)
+		value, ok := authorizationCredential(r, "Bearer")
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="feedflow"`)
+			http.Error(w, "Bearer access token is required", http.StatusUnauthorized)
 			return
 		}
-		vals := strings.Fields(authHeader)
-		if len(vals) != 2 || vals[0] != "ApiKey" || vals[1] == "" {
-			http.Error(w, "Invalid Authorization header", http.StatusUnauthorized)
+		if h.tokenVerifier == nil {
+			http.Error(w, "authentication unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		apiKey := vals[1]
-
-		ctx := r.Context()
-		cacheKey := fmt.Sprintf("auth:apikey:%s", apiKey)
-		user, err := h.cache.GetUser(ctx, cacheKey)
-		if err == nil {
-			ctx = context.WithValue(ctx, userContextKey, user)
-			next(w, r.WithContext(ctx))
-			return
-		} else if !errors.Is(err, redis.Nil) {
-			slog.WarnContext(ctx, "failed to get user from cache", "error", err)
-		}
-
-		user, err = h.storage.GetUserByApiKey(ctx, apiKey)
-		if err != nil {
-			http.Error(w, "Invalid Api key", http.StatusUnauthorized)
+		userID, err := h.tokenVerifier.Verify(value)
+		if err != nil || userID == uuid.Nil {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="feedflow", error="invalid_token"`)
+			http.Error(w, "invalid access token", http.StatusUnauthorized)
 			return
 		}
-
-		h.runInBackground(func(bgCtx context.Context) {
-			if err := h.cache.SetUser(bgCtx, cacheKey, user, 15*time.Minute); err != nil && bgCtx.Err() == nil {
-				slog.WarnContext(bgCtx, "failed to cache user", "user_id", user.ID.String(), "error", err)
-			}
-		})
-
-		ctx = context.WithValue(ctx, userContextKey, user)
+		ctx := context.WithValue(r.Context(), userContextKey, model.User{ID: userID})
 		next(w, r.WithContext(ctx))
 	}
 }

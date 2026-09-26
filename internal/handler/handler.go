@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"FeedFlow/internal/auth"
 	"FeedFlow/internal/model"
 
 	"github.com/google/uuid"
@@ -34,6 +35,8 @@ type Handler struct {
 	storage              Storage
 	cache                Cache
 	notificationChannels NotificationChannelStorage
+	tokenIssuer          TokenIssuer
+	tokenVerifier        TokenVerifier
 	idGenerator          func() uuid.UUID
 	apiKeyGenerator      func() (string, error)
 	backgroundCtx        context.Context
@@ -43,9 +46,26 @@ type Handler struct {
 	backgroundWG         sync.WaitGroup
 }
 
-func NewHandler(storage Storage, cache Cache, notificationChannels NotificationChannelStorage) *Handler {
+type TokenIssuer interface {
+	Issue(uuid.UUID) (auth.AccessToken, error)
+}
+
+type TokenVerifier interface {
+	Verify(string) (uuid.UUID, error)
+}
+
+type Option func(*Handler)
+
+func WithTokens(issuer TokenIssuer, verifier TokenVerifier) Option {
+	return func(h *Handler) {
+		h.tokenIssuer = issuer
+		h.tokenVerifier = verifier
+	}
+}
+
+func NewHandler(storage Storage, cache Cache, notificationChannels NotificationChannelStorage, options ...Option) *Handler {
 	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
-	return &Handler{
+	h := &Handler{
 		storage:              storage,
 		cache:                cache,
 		notificationChannels: notificationChannels,
@@ -54,6 +74,10 @@ func NewHandler(storage Storage, cache Cache, notificationChannels NotificationC
 		backgroundCtx:        backgroundCtx,
 		cancelBackground:     cancelBackground,
 	}
+	for _, option := range options {
+		option(h)
+	}
+	return h
 }
 
 func (h *Handler) runInBackground(task func(context.Context)) {
@@ -95,6 +119,7 @@ func (h *Handler) InitRouter() *http.ServeMux {
 	router := http.NewServeMux()
 
 	router.HandleFunc("POST /v1/users", h.PostUser)
+	router.HandleFunc("POST /v1/auth/token", h.PostToken)
 	router.HandleFunc("POST /v1/feeds", h.AuthMiddleware(h.PostFeed))
 	router.HandleFunc("GET /v1/feeds", h.GetAllFeeds)
 	router.HandleFunc("POST /v1/feed_follows", h.AuthMiddleware(h.PostFollowFeed))

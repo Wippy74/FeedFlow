@@ -11,6 +11,7 @@ bin/
 coverage.txt
 
 .env
+.secrets/
 
 .idea/
 

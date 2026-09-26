@@ -18,6 +18,7 @@ import (
 	"FeedFlow/internal/config"
 	"FeedFlow/internal/database/storage"
 	"FeedFlow/internal/handler"
+	notificationhttp "FeedFlow/internal/notification/httpapi"
 	notificationpostgres "FeedFlow/internal/notification/postgres"
 	"FeedFlow/internal/worker"
 
@@ -64,6 +65,10 @@ func run() (runErr error) {
 		return err
 	}
 	tokenVerifier, err := auth.NewVerifier(publicKey, jwtCfg.KeyID, jwtCfg.Issuer, auth.AudienceAPI)
+	if err != nil {
+		return err
+	}
+	notificationVerifier, err := auth.NewVerifier(publicKey, jwtCfg.KeyID, jwtCfg.Issuer, auth.AudienceNotifications)
 	if err != nil {
 		return err
 	}
@@ -121,10 +126,11 @@ func run() (runErr error) {
 		workerDone <- worker.Start(appCtx, dbRepo, time.Minute, 3)
 	}()
 
-	apiHandler := handler.NewHandler(dbRepo, cacheRepo, notificationRepo, handler.WithTokens(tokenIssuer, tokenVerifier))
+	apiHandler := handler.NewHandler(dbRepo, cacheRepo, handler.WithTokens(tokenIssuer, tokenVerifier))
+	router := composeRouter(apiHandler, notificationhttp.NewHandler(notificationRepo), notificationVerifier)
 	server := &http.Server{
 		Addr:         ":8080",
-		Handler:      apiHandler.InitRouter(),
+		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
@@ -176,4 +182,10 @@ func run() (runErr error) {
 
 	slog.Info("application stopped")
 	return runErr
+}
+
+func composeRouter(monolith *handler.Handler, notifications *notificationhttp.Handler, verifier auth.TokenVerifier) *http.ServeMux {
+	router := monolith.InitRouter()
+	notifications.RegisterRoutes(router, verifier)
+	return router
 }

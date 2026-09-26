@@ -33,8 +33,6 @@ func AuthorizationCredential(r *http.Request, scheme string) (string, bool) {
 	return parts[1], true
 }
 
-// Middleware authenticates locally and fails closed. It never needs a user
-// repository, cache, notification settings or the token issuer's private key.
 func Middleware(verifier TokenVerifier) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

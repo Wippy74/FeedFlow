@@ -1,8 +1,8 @@
 package main
 
 import (
-	notificationpostgres "FeedFlow/internal/notification/postgres"
 	"context"
+	"crypto/ed25519"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,11 +12,13 @@ import (
 	"syscall"
 	"time"
 
+	"FeedFlow/internal/auth"
 	cache "FeedFlow/internal/cache"
 	"FeedFlow/internal/closer"
 	"FeedFlow/internal/config"
 	"FeedFlow/internal/database/storage"
 	"FeedFlow/internal/handler"
+	notificationpostgres "FeedFlow/internal/notification/postgres"
 	"FeedFlow/internal/worker"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -40,6 +42,30 @@ func run() (runErr error) {
 	cfg, err := config.ReadConfig()
 	if err != nil {
 		return fmt.Errorf("read config: %w", err)
+	}
+	jwtCfg, err := config.ReadJWTConfig()
+	if err != nil {
+		return fmt.Errorf("read JWT config: %w", err)
+	}
+	privateKey, err := auth.LoadPrivateKey(jwtCfg.PrivateKeyPath)
+	if err != nil {
+		return err
+	}
+	publicKey, err := auth.LoadPublicKey(jwtCfg.PublicKeyPath)
+	if err != nil {
+		return err
+	}
+	if !privateKey.Public().(ed25519.PublicKey).Equal(publicKey) {
+		return fmt.Errorf("JWT public key does not match private key")
+	}
+	tokenIssuer, err := auth.NewIssuer(privateKey, jwtCfg.KeyID, jwtCfg.Issuer,
+		[]string{auth.AudienceAPI, auth.AudienceNotifications}, jwtCfg.AccessTokenTTL)
+	if err != nil {
+		return err
+	}
+	tokenVerifier, err := auth.NewVerifier(publicKey, jwtCfg.KeyID, jwtCfg.Issuer, auth.AudienceAPI)
+	if err != nil {
+		return err
 	}
 
 	slog.Info("connecting to database")
@@ -95,7 +121,7 @@ func run() (runErr error) {
 		workerDone <- worker.Start(appCtx, dbRepo, time.Minute, 3)
 	}()
 
-	apiHandler := handler.NewHandler(dbRepo, cacheRepo, notificationRepo)
+	apiHandler := handler.NewHandler(dbRepo, cacheRepo, notificationRepo, handler.WithTokens(tokenIssuer, tokenVerifier))
 	server := &http.Server{
 		Addr:         ":8080",
 		Handler:      apiHandler.InitRouter(),

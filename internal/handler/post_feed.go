@@ -1,9 +1,11 @@
 package handler
 
 import (
-	"encoding/json"
+	"io"
 	"log/slog"
 	"net/http"
+
+	"FeedFlow/internal/httpapi"
 )
 
 func (h *Handler) PostFeed(w http.ResponseWriter, r *http.Request) {
@@ -14,17 +16,18 @@ func (h *Handler) PostFeed(w http.ResponseWriter, r *http.Request) {
 	}
 	var params parameters
 
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&params); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(r.Body)
+	if err := httpapi.DecodeJSON(w, r, &params); err != nil {
+		httpapi.WriteDecodeError(w, err)
 		return
 	}
-	defer func() { _ = r.Body.Close() }()
 
 	savedFeed, err := h.storage.AddFeed(ctx, h.idGenerator(), params.Name, params.Url)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.ErrorContext(ctx, "failed to create feed", "error", err)
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to create feed")
 		return
 	}
 
@@ -32,10 +35,5 @@ func (h *Handler) PostFeed(w http.ResponseWriter, r *http.Request) {
 		slog.WarnContext(ctx, "failed to invalidate feeds cache", "feed_id", savedFeed.ID.String(), "error", err)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(savedFeed); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	httpapi.WriteJSON(w, http.StatusOK, savedFeed)
 }

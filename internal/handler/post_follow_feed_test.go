@@ -7,10 +7,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"FeedFlow/internal/auth"
 	"FeedFlow/internal/model"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPostFollowFeedUsesAuthenticatedUser(t *testing.T) {
@@ -25,14 +27,18 @@ func TestPostFollowFeedUsesAuthenticatedUser(t *testing.T) {
 			assert.Equal(t, feedID, gotFeedID)
 			return nil
 		},
-	}, &MockCache{}, &MockNotificationChannelStorage{})
+	}, &MockCache{})
 
-	body := bytes.NewBufferString(`{"userId":"` + requestUserID.String() + `","feedId":"` + feedID.String() + `"}`)
+	body := bytes.NewBufferString(`{"feedId":"` + feedID.String() + `"}`)
 	req := httptest.NewRequest(http.MethodPost, "/v1/feed_follows", body)
-	req = req.WithContext(context.WithValue(req.Context(), userContextKey, authenticatedUser))
+	issuer, verifier := testTokens(t)
+	token, err := issuer.Issue(authenticatedUser.ID)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+	req.Header.Set("X-User-ID", requestUserID.String())
 	rr := httptest.NewRecorder()
 
-	h.PostFollowFeed(rr, req)
+	auth.Middleware(verifier)(http.HandlerFunc(h.PostFollowFeed)).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusCreated, rr.Code)
 }

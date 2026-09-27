@@ -2,12 +2,12 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
 	"time"
 
+	"FeedFlow/internal/httpapi"
 	"FeedFlow/internal/model"
 
 	"github.com/redis/go-redis/v9"
@@ -17,15 +17,11 @@ func (h *Handler) GetAllFeeds(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	cacheKey := "feeds:all"
-	w.Header().Set("Content-Type", "application/json")
 
 	allFeeds, err := h.cache.GetFeeds(ctx, cacheKey)
 	if err == nil {
 		w.Header().Set("X-Cache", "HIT")
-		w.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(w).Encode(allFeeds); err != nil {
-			slog.ErrorContext(ctx, "failed to encode cached feeds", "error", err)
-		}
+		httpapi.WriteJSON(w, http.StatusOK, allFeeds)
 		return
 	} else if !errors.Is(err, redis.Nil) {
 		slog.WarnContext(ctx, "failed to get feeds from cache", "error", err)
@@ -33,7 +29,8 @@ func (h *Handler) GetAllFeeds(w http.ResponseWriter, r *http.Request) {
 
 	allFeeds, err = h.storage.GetAllFeeds(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		slog.ErrorContext(ctx, "failed to get feeds", "error", err)
+		httpapi.WriteError(w, http.StatusInternalServerError, "internal_error", "failed to get feeds")
 		return
 	}
 	if allFeeds == nil {
@@ -47,9 +44,5 @@ func (h *Handler) GetAllFeeds(w http.ResponseWriter, r *http.Request) {
 	})
 
 	w.Header().Set("X-Cache", "MISS")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(allFeeds); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	httpapi.WriteJSON(w, http.StatusOK, allFeeds)
 }

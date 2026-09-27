@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"FeedFlow/internal/auth"
 	"FeedFlow/internal/model"
 
 	"github.com/google/uuid"
@@ -28,13 +29,16 @@ func TestGetPostsReturnsImmediatelyOnCacheHit(t *testing.T) {
 			assert.Equal(t, "posts:user:"+user.ID.String()+":limit:10:offset:0", key)
 			return wantPosts, nil
 		},
-	}, &MockNotificationChannelStorage{})
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/posts", nil)
-	req = req.WithContext(context.WithValue(req.Context(), userContextKey, user))
+	issuer, verifier := testTokens(t)
+	token, err := issuer.Issue(user.ID)
+	require.NoError(t, err)
+	req.Header.Set("Authorization", "Bearer "+token.AccessToken)
 	rr := httptest.NewRecorder()
 
-	h.GetPosts(rr, req)
+	auth.Middleware(verifier)(http.HandlerFunc(h.GetPosts)).ServeHTTP(rr, req)
 
 	assert.Equal(t, http.StatusOK, rr.Code)
 	assert.Equal(t, "HIT", rr.Header().Get("X-Cache"))

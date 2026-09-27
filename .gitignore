@@ -11,5 +11,8 @@ bin/
 coverage.txt
 
 .env
+.secrets/
 
 .idea/
+
+graphify-out/

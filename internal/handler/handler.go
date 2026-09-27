@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"FeedFlow/internal/auth"
 	"FeedFlow/internal/model"
 
 	"github.com/google/uuid"
@@ -31,29 +32,46 @@ type Cache interface {
 }
 
 type Handler struct {
-	storage              Storage
-	cache                Cache
-	notificationChannels NotificationChannelStorage
-	idGenerator          func() uuid.UUID
-	apiKeyGenerator      func() (string, error)
-	backgroundCtx        context.Context
-	cancelBackground     context.CancelFunc
-	backgroundMu         sync.Mutex
-	backgroundClosed     bool
-	backgroundWG         sync.WaitGroup
+	storage          Storage
+	cache            Cache
+	tokenIssuer      TokenIssuer
+	tokenVerifier    auth.TokenVerifier
+	idGenerator      func() uuid.UUID
+	apiKeyGenerator  func() (string, error)
+	backgroundCtx    context.Context
+	cancelBackground context.CancelFunc
+	backgroundMu     sync.Mutex
+	backgroundClosed bool
+	backgroundWG     sync.WaitGroup
 }
 
-func NewHandler(storage Storage, cache Cache, notificationChannels NotificationChannelStorage) *Handler {
-	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
-	return &Handler{
-		storage:              storage,
-		cache:                cache,
-		notificationChannels: notificationChannels,
-		idGenerator:          uuid.New,
-		apiKeyGenerator:      generateAPIKey,
-		backgroundCtx:        backgroundCtx,
-		cancelBackground:     cancelBackground,
+type TokenIssuer interface {
+	Issue(uuid.UUID) (auth.AccessToken, error)
+}
+
+type Option func(*Handler)
+
+func WithTokens(issuer TokenIssuer, verifier auth.TokenVerifier) Option {
+	return func(h *Handler) {
+		h.tokenIssuer = issuer
+		h.tokenVerifier = verifier
 	}
+}
+
+func NewHandler(storage Storage, cache Cache, options ...Option) *Handler {
+	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
+	h := &Handler{
+		storage:          storage,
+		cache:            cache,
+		idGenerator:      uuid.New,
+		apiKeyGenerator:  generateAPIKey,
+		backgroundCtx:    backgroundCtx,
+		cancelBackground: cancelBackground,
+	}
+	for _, option := range options {
+		option(h)
+	}
+	return h
 }
 
 func (h *Handler) runInBackground(task func(context.Context)) {
@@ -95,14 +113,11 @@ func (h *Handler) InitRouter() *http.ServeMux {
 	router := http.NewServeMux()
 
 	router.HandleFunc("POST /v1/users", h.PostUser)
-	router.HandleFunc("POST /v1/feeds", h.AuthMiddleware(h.PostFeed))
+	router.HandleFunc("POST /v1/auth/token", h.PostToken)
+	protected := auth.Middleware(h.tokenVerifier)
+	router.Handle("POST /v1/feeds", protected(http.HandlerFunc(h.PostFeed)))
 	router.HandleFunc("GET /v1/feeds", h.GetAllFeeds)
-	router.HandleFunc("POST /v1/feed_follows", h.AuthMiddleware(h.PostFollowFeed))
-	router.HandleFunc("GET /v1/posts", h.AuthMiddleware(h.GetPosts))
-
-	router.HandleFunc("POST /v1/notification-channel", h.AuthMiddleware(h.PostNotificationChannel))
-	router.HandleFunc("GET /v1/notification-channel", h.AuthMiddleware(h.GetNotificationChannel))
-	router.HandleFunc("PATCH /v1/notification-channel", h.AuthMiddleware(h.PatchNotificationChannel))
-	router.HandleFunc("DELETE /v1/notification-channel", h.AuthMiddleware(h.DeleteNotificationChannel))
+	router.Handle("POST /v1/feed_follows", protected(http.HandlerFunc(h.PostFollowFeed)))
+	router.Handle("GET /v1/posts", protected(http.HandlerFunc(h.GetPosts)))
 	return router
 }

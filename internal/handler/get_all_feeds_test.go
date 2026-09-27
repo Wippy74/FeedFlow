@@ -86,7 +86,7 @@ func TestGetAllFeeds(t *testing.T) {
 					return nil
 				},
 			}
-			h := NewHandler(mockStorage, mockCache, &MockNotificationChannelStorage{})
+			h := NewHandler(mockStorage, mockCache)
 
 			req, err := http.NewRequest("GET", "/v1/feeds", nil)
 			require.NoError(t, err)

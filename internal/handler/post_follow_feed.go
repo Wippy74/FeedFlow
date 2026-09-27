@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -23,7 +24,9 @@ func (h *Handler) PostFollowFeed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var params parameters
-	defer r.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(r.Body)
 	if err := httpapi.DecodeJSON(w, r, &params); err != nil {
 		httpapi.WriteDecodeError(w, err)
 		return

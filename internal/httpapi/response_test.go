@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -50,7 +51,9 @@ func TestDecodeJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(tt.body))
-			defer r.Body.Close()
+			defer func(Body io.ReadCloser) {
+				_ = Body.Close()
+			}(r.Body)
 			var value struct {
 				Name string `json:"name"`
 			}

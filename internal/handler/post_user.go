@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"io"
 	"log/slog"
 	"net/http"
 
@@ -17,7 +18,9 @@ func (h *Handler) PostUser(w http.ResponseWriter, r *http.Request) {
 
 	var parameters params
 
-	defer r.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(r.Body)
 	if err := httpapi.DecodeJSON(w, r, &parameters); err != nil {
 		httpapi.WriteDecodeError(w, err)
 		return

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -94,7 +95,9 @@ func (h *Handler) PostChannel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	defer r.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(r.Body)
 	var request struct {
 		Type        notification.ChannelType `json:"type"`
 		Destination string                   `json:"destination"`
@@ -151,7 +154,9 @@ func (h *Handler) PatchChannel(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	defer r.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(r.Body)
 	var request struct {
 		Enabled *bool `json:"enabled"`
 	}

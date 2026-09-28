@@ -120,7 +120,7 @@ func run() (runErr error) {
 	apiHandler := handler.NewHandler(dbRepo, cacheRepo, handler.WithTokens(tokenIssuer, tokenVerifier))
 	router := apiHandler.InitRouter()
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         cfg.HTTPAddr,
 		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,

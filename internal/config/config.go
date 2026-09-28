@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ type Config struct {
 	DBMaxConnLifetime time.Duration
 	DBMaxConnIdleTime time.Duration
 	RedisAddr         string
+	HTTPAddr          string
 }
 
 const (
@@ -42,6 +44,13 @@ func ReadConfig() (*Config, error) {
 	redisHost := os.Getenv("REDIS_HOST")
 	redisPort := os.Getenv("REDIS_PORT")
 	redisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
+	httpAddr := strings.TrimSpace(os.Getenv("API_HTTP_ADDR"))
+	if httpAddr == "" {
+		httpAddr = "127.0.0.1:8082"
+	}
+	if _, _, err := net.SplitHostPort(httpAddr); err != nil {
+		return nil, fmt.Errorf("invalid API_HTTP_ADDR: %w", err)
+	}
 
 	dbMaxConns, err := readInt32("DB_MAX_CONNS", defaultDBMaxConns)
 	if err != nil {
@@ -83,6 +92,7 @@ func ReadConfig() (*Config, error) {
 		DBMaxConnLifetime: dbMaxConnLifetime,
 		DBMaxConnIdleTime: dbMaxConnIdleTime,
 		RedisAddr:         redisAddr,
+		HTTPAddr:          httpAddr,
 	}, nil
 }
 

@@ -3,14 +3,13 @@ package storage
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 
 	"FeedFlow/internal/model"
-	notification "FeedFlow/internal/notification/model"
+	"FeedFlow/internal/notification/contract"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -50,7 +49,6 @@ func (row rowStub) Scan(destinations ...any) error {
 
 func TestSavePostWritesPostAndOutboxAtomically(t *testing.T) {
 	now := time.Date(2026, time.September, 19, 12, 30, 0, 0, time.UTC)
-	eventID := uuid.MustParse("df571fcc-b1d7-4a0f-892e-6b74de3a7218")
 	postID := uuid.MustParse("06e711e1-46e2-4dd3-9a1d-13d910f38310")
 	feedID := uuid.MustParse("03ba41b1-4fcf-4532-a865-2fbd0542b133")
 	description := "description"
@@ -64,7 +62,6 @@ func TestSavePostWritesPostAndOutboxAtomically(t *testing.T) {
 	}}
 	repository := NewRepository(db)
 	repository.now = func() time.Time { return now }
-	repository.idGenerator = func() uuid.UUID { return eventID }
 
 	inserted, err := repository.SavePost(context.Background(), model.Post{
 		ID:          postID,
@@ -81,21 +78,14 @@ func TestSavePostWritesPostAndOutboxAtomically(t *testing.T) {
 	assert.Contains(t, capturedQuery, "INSERT INTO posts")
 	assert.Contains(t, capturedQuery, "INSERT INTO outbox_events")
 	assert.Contains(t, capturedQuery, "FROM inserted_post")
-	require.Len(t, capturedArgs, 10)
-	assert.Equal(t, eventID, capturedArgs[7])
-	assert.Equal(t, notification.EventPostCreated, capturedArgs[8])
-
-	var payload postCreatedPayload
-	require.NoError(t, json.Unmarshal(capturedArgs[9].([]byte), &payload))
-	assert.Equal(t, eventID, payload.EventID)
-	assert.Equal(t, notification.EventPostCreated, payload.EventType)
-	assert.Equal(t, postCreatedSchemaVersion, payload.SchemaVersion)
-	assert.Equal(t, now, payload.OccurredAt)
-	assert.Equal(t, postCreatedProducer, payload.Producer)
-	assert.Equal(t, postID, payload.Data.PostID)
-	assert.Equal(t, feedID, payload.Data.FeedID)
-	require.NotNil(t, payload.Data.Description)
-	assert.Equal(t, description, *payload.Data.Description)
+	assert.Contains(t, capturedQuery, "FROM intent_candidates")
+	require.Len(t, capturedArgs, 12)
+	assert.Equal(t, contract.NotificationRequested, capturedArgs[7])
+	assert.Equal(t, contract.RequestsTopicV1, capturedArgs[8])
+	assert.Equal(t, contract.RequestedSchemaV1, capturedArgs[9])
+	assert.Equal(t, contract.TemplateNewPost, capturedArgs[10])
+	assert.Equal(t, notificationProducer, capturedArgs[11])
+	assert.NotContains(t, capturedQuery, "post.created")
 }
 
 func TestSavePostDoesNotCreateOutboxEventForDuplicatePost(t *testing.T) {

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:feedflow:notification-requested:v1",
+  "title": "FeedFlow notification.requested v1",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "event_id",
+    "event_type",
+    "schema_version",
+    "occurred_at",
+    "producer",
+    "notification_id",
+    "user_id",
+    "template",
+    "data"
+  ],
+  "properties": {
+    "event_id": { "type": "string", "format": "uuid" },
+    "event_type": { "const": "notification.requested" },
+    "schema_version": { "const": 1 },
+    "occurred_at": { "type": "string", "format": "date-time" },
+    "producer": { "type": "string", "minLength": 1 },
+    "notification_id": { "type": "string", "format": "uuid" },
+    "user_id": { "type": "string", "format": "uuid" },
+    "template": { "const": "new_post" },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["post_id", "feed_id", "title", "body", "url", "published_at"],
+      "properties": {
+        "post_id": { "type": "string", "format": "uuid" },
+        "feed_id": { "type": "string", "format": "uuid" },
+        "title": { "type": "string", "minLength": 1 },
+        "body": { "type": "string" },
+        "url": { "type": "string", "format": "uri" },
+        "published_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

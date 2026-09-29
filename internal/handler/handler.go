@@ -15,7 +15,7 @@ import (
 type Storage interface {
 	SaveUser(ctx context.Context, id uuid.UUID, name, apiKey string) (model.User, error)
 	AddFeed(ctx context.Context, id uuid.UUID, name, url string) (model.Feed, error)
-	GetAllFeeds(ctx context.Context) ([]model.Feed, error)
+	GetFeedsPage(ctx context.Context, after *uuid.UUID, limit int) ([]model.Feed, error)
 	FollowFeed(ctx context.Context, userID, feedID uuid.UUID) error
 	GetPosts(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Post, error)
 	GetUserByApiKey(ctx context.Context, apiKey string) (model.User, error)

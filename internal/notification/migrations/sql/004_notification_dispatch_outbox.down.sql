@@ -1,0 +1,1 @@
+DROP TABLE notification_dispatch_outbox;

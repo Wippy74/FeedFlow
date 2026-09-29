@@ -18,8 +18,6 @@ import (
 	"FeedFlow/internal/config"
 	"FeedFlow/internal/database/storage"
 	"FeedFlow/internal/handler"
-	notificationhttp "FeedFlow/internal/notification/httpapi"
-	notificationpostgres "FeedFlow/internal/notification/postgres"
 	"FeedFlow/internal/worker"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -68,11 +66,6 @@ func run() (runErr error) {
 	if err != nil {
 		return err
 	}
-	notificationVerifier, err := auth.NewVerifier(publicKey, jwtCfg.KeyID, jwtCfg.Issuer, auth.AudienceNotifications)
-	if err != nil {
-		return err
-	}
-
 	slog.Info("connecting to database")
 	poolConfig, err := pgxpool.ParseConfig(cfg.DBUrl)
 	if err != nil {
@@ -95,8 +88,6 @@ func run() (runErr error) {
 		return fmt.Errorf("ping database: %w", err)
 	}
 	cancelConnect()
-
-	notificationRepo := notificationpostgres.NewRepository(dbPool)
 
 	resourceCloser := closer.New()
 	if err := resourceCloser.Add("PostgreSQL pool", func() error {
@@ -127,9 +118,9 @@ func run() (runErr error) {
 	}()
 
 	apiHandler := handler.NewHandler(dbRepo, cacheRepo, handler.WithTokens(tokenIssuer, tokenVerifier))
-	router := composeRouter(apiHandler, notificationhttp.NewHandler(notificationRepo), notificationVerifier)
+	router := apiHandler.InitRouter()
 	server := &http.Server{
-		Addr:         ":8080",
+		Addr:         cfg.HTTPAddr,
 		Handler:      router,
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -182,10 +173,4 @@ func run() (runErr error) {
 
 	slog.Info("application stopped")
 	return runErr
-}
-
-func composeRouter(monolith *handler.Handler, notifications *notificationhttp.Handler, verifier auth.TokenVerifier) *http.ServeMux {
-	router := monolith.InitRouter()
-	notifications.RegisterRoutes(router, verifier)
-	return router
 }

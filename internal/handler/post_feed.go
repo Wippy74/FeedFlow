@@ -31,7 +31,7 @@ func (h *Handler) PostFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.cache.Delete(ctx, "feeds:all"); err != nil {
+	if err := h.cache.Delete(ctx, firstFeedsPageKey); err != nil {
 		slog.WarnContext(ctx, "failed to invalidate feeds cache", "feed_id", savedFeed.ID.String(), "error", err)
 	}
 

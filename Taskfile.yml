@@ -43,9 +43,19 @@ tasks:
       - bin/api
 
   run:
-    desc: Run the API locally
+    desc: Run the monolith locally (internal port 8082)
     cmds:
       - go run ./cmd/api
+
+  run:notification-api:
+    desc: Run the notification settings API locally (internal port 8081)
+    cmds:
+      - go run ./cmd/notification-api
+
+  run:gateway:
+    desc: Run the shared gateway locally (public port 8080)
+    cmds:
+      - go run ./cmd/gateway
 
   tidy:
     desc: Synchronize Go module dependencies

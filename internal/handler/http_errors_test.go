@@ -22,11 +22,11 @@ func TestMonolithStorageErrorsDoNotLeakDetails(t *testing.T) {
 	require.NoError(t, err)
 	failure := errors.New("SQL with private credentials")
 	h := NewHandler(&MockStorage{
-		SaveUserFn:    func(context.Context, uuid.UUID, string, string) (model.User, error) { return model.User{}, failure },
-		AddFeedFn:     func(context.Context, uuid.UUID, string, string) (model.Feed, error) { return model.Feed{}, failure },
-		FollowFeedFn:  func(context.Context, uuid.UUID, uuid.UUID) error { return failure },
-		GetPostsFn:    func(context.Context, uuid.UUID, int, int) ([]model.Post, error) { return nil, failure },
-		GetAllFeedsFn: func(context.Context) ([]model.Feed, error) { return nil, failure },
+		SaveUserFn:     func(context.Context, uuid.UUID, string, string) (model.User, error) { return model.User{}, failure },
+		AddFeedFn:      func(context.Context, uuid.UUID, string, string) (model.Feed, error) { return model.Feed{}, failure },
+		FollowFeedFn:   func(context.Context, uuid.UUID, uuid.UUID) error { return failure },
+		GetPostsFn:     func(context.Context, uuid.UUID, int, int) ([]model.Post, error) { return nil, failure },
+		GetFeedsPageFn: func(context.Context, *uuid.UUID, int) ([]model.Feed, error) { return nil, failure },
 	}, &MockCache{
 		GetPostFn:  func(context.Context, string) ([]model.Post, error) { return nil, redis.Nil },
 		GetFeedsFn: func(context.Context, string) ([]model.Feed, error) { return nil, redis.Nil },

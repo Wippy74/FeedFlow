@@ -12,17 +12,18 @@ import (
 	"syscall"
 	"time"
 
-	"FeedFlow/internal/closer"
-	"FeedFlow/internal/config"
+	"FeedFlow/internal/notification/broker"
+	"FeedFlow/internal/notification/contract"
 	notificationemail "FeedFlow/internal/notification/email"
 	notification "FeedFlow/internal/notification/model"
+	"FeedFlow/internal/notification/pipeline"
 	notificationpostgres "FeedFlow/internal/notification/postgres"
 	"FeedFlow/internal/notification/retry"
 	notificationsender "FeedFlow/internal/notification/sender"
 	notificationtelegram "FeedFlow/internal/notification/telegram"
-	notificationworker "FeedFlow/internal/notification/worker"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/joho/godotenv"
 )
 
 const (
@@ -44,61 +45,61 @@ func main() {
 func run() (runErr error) {
 	appCtx, stopSignals := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stopSignals()
-
-	cfg, err := config.ReadConfig()
-	if err != nil {
-		return fmt.Errorf("read config: %w", err)
+	_ = godotenv.Load()
+	databaseURL := os.Getenv("NOTIFICATION_DATABASE_URL")
+	if databaseURL == "" {
+		return fmt.Errorf("NOTIFICATION_DATABASE_URL is required")
 	}
-
-	dbPool, err := connectPostgres(appCtx, cfg)
+	dbPool, err := connectPostgres(appCtx, databaseURL)
 	if err != nil {
 		return err
 	}
-
-	resourceCloser := closer.New()
-	if err := resourceCloser.Add("PostgreSQL pool", func() error {
-		dbPool.Close()
-		return nil
-	}); err != nil {
-		dbPool.Close()
-		return fmt.Errorf("register PostgreSQL pool closer: %w", err)
-	}
-	defer func() {
-		runErr = errors.Join(runErr, resourceCloser.Close())
-	}()
+	defer dbPool.Close()
 
 	senders, err := newSenderRegistry()
 	if err != nil {
 		return fmt.Errorf("create notification senders: %w", err)
 	}
-
-	service, err := notificationworker.New(
-		notificationpostgres.NewRepository(dbPool),
-		senders,
-		retry.DefaultPolicy(),
-		notificationworker.DefaultConfig(),
-	)
+	publisher, err := broker.NewPublisher(os.Getenv("KAFKA_BROKERS"))
 	if err != nil {
-		return fmt.Errorf("create notification worker: %w", err)
+		return err
 	}
-
+	defer publisher.Close()
+	consumerClient, err := broker.NewConsumer(os.Getenv("KAFKA_BROKERS"),
+		"feedflow-notifications-v1", contract.RequestsTopicV1,
+		contract.Retry1mTopicV1, contract.Retry10mTopicV1, contract.Retry1hTopicV1)
+	if err != nil {
+		return err
+	}
+	defer consumerClient.Close()
+	repository := notificationpostgres.NewRepository(dbPool)
+	consumer := pipeline.Consumer{Client: consumerClient, Store: repository, Publisher: publisher}
+	worker := pipeline.Worker{Store: repository, Senders: senders, Policy: retry.DefaultPolicy()}
+	ctx, cancel := context.WithCancel(appCtx)
+	defer cancel()
+	results := make(chan error, 2)
+	go func() { results <- consumer.Run(ctx) }()
+	running := 1
+	if len(senders) > 0 {
+		go func() { results <- worker.Run(ctx) }()
+		running++
+	} else {
+		slog.Warn("no delivery provider configured; accepted deliveries will remain pending")
+	}
 	slog.Info("notification service started")
-	if err := service.Run(appCtx); err != nil {
-		return fmt.Errorf("run notification worker: %w", err)
+	first := <-results
+	cancel()
+	if running == 2 {
+		return errors.Join(first, <-results)
 	}
-	slog.Info("notification service stopped")
-	return nil
+	return first
 }
 
-func connectPostgres(ctx context.Context, cfg *config.Config) (*pgxpool.Pool, error) {
-	poolConfig, err := pgxpool.ParseConfig(cfg.DBUrl)
+func connectPostgres(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
+	poolConfig, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse database pool config: %w", err)
 	}
-	poolConfig.MaxConns = cfg.DBMaxConns
-	poolConfig.MinConns = cfg.DBMinConns
-	poolConfig.MaxConnLifetime = cfg.DBMaxConnLifetime
-	poolConfig.MaxConnIdleTime = cfg.DBMaxConnIdleTime
 
 	connectCtx, cancelConnect := context.WithTimeout(ctx, 10*time.Second)
 	defer cancelConnect()
@@ -134,12 +135,6 @@ func newSenderRegistry() (notificationsender.Registry, error) {
 			return nil, err
 		}
 		senders[notification.ChannelEmail] = emailSender
-	}
-
-	if len(senders) == 0 {
-		return nil, fmt.Errorf(
-			"no notification channels configured: set TELEGRAM_BOT_TOKEN or SMTP_HOST",
-		)
 	}
 
 	return notificationsender.NewRegistry(senders)

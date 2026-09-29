@@ -107,12 +107,17 @@ func (repo *Repository) GetChannels(ctx context.Context, userID uuid.UUID) ([]no
 }
 
 func (repo *Repository) SetChannelEnabled(ctx context.Context, userID uuid.UUID, channelID uuid.UUID, enabled bool) (notification.Channel, error) {
+	tx, err := repo.pool.Begin(ctx)
+	if err != nil {
+		return notification.Channel{}, channelStorageError("begin channel update", err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
 	query := `UPDATE notification_channels SET enabled = $3, updated_at = NOW()
 		WHERE id = $1 AND user_id = $2
 		RETURNING id, user_id, channel_type,destination, enabled
 	`
 
-	channel, err := scanChannel(repo.pool.QueryRow(
+	channel, err := scanChannel(tx.QueryRow(
 		ctx,
 		query,
 		channelID,
@@ -125,18 +130,41 @@ func (repo *Repository) SetChannelEnabled(ctx context.Context, userID uuid.UUID,
 	if err != nil {
 		return notification.Channel{}, channelStorageError("set notification channel enabled", err)
 	}
+	if !enabled {
+		if _, err := tx.Exec(ctx, `UPDATE notification_deliveries SET status = 'cancelled', updated_at = NOW()
+			WHERE channel_id = $1 AND user_id = $2 AND status IN ('pending', 'retry_wait')`,
+			channelID, userID); err != nil {
+			return notification.Channel{}, channelStorageError("cancel channel deliveries", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return notification.Channel{}, channelStorageError("commit channel update", err)
+	}
 	return channel, nil
 }
 
 func (repo *Repository) DeleteChannel(ctx context.Context, userID uuid.UUID, channelID uuid.UUID) error {
+	tx, err := repo.pool.Begin(ctx)
+	if err != nil {
+		return channelStorageError("begin channel deletion", err)
+	}
+	defer func() { _ = tx.Rollback(context.WithoutCancel(ctx)) }()
+	if _, err := tx.Exec(ctx, `UPDATE notification_deliveries SET status = 'cancelled', updated_at = NOW()
+		WHERE channel_id = $1 AND user_id = $2 AND status IN ('pending', 'retry_wait')`,
+		channelID, userID); err != nil {
+		return channelStorageError("cancel channel deliveries", err)
+	}
 	query := `DELETE FROM notification_channels WHERE id = $1 AND user_id = $2`
 
-	tag, err := repo.pool.Exec(ctx, query, channelID, userID)
+	tag, err := tx.Exec(ctx, query, channelID, userID)
 	if err != nil {
 		return channelStorageError("delete notification channel", err)
 	}
 	if tag.RowsAffected() != 1 {
 		return channelrepo.ErrChannelNotFound
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return channelStorageError("commit channel deletion", err)
 	}
 	return nil
 }

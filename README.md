@@ -8,8 +8,11 @@ FeedFlow — backend для автоматического сбора публи
 
 | Приложение | Назначение |
 | --- | --- |
-| `cmd/api` | Монолит: HTTP API на порту `8080`, регистрация и JWT, каталог лент, подписки, публикации, RSS-воркер и кеш Redis |
-| `cmd/notifier` | Сервис нотификаций: обработка outbox и заданий доставки в PostgreSQL, отправка через Telegram Bot API и SMTP, повторные попытки |
+| `cmd/gateway` | Единая точка входа на порту `8080`: маршрутизация запросов к двум API |
+| `cmd/api` | Монолит на внутреннем порту `8082`: регистрация и JWT, каталог лент, подписки, публикации, RSS-воркер и кеш Redis |
+| `cmd/notification-api` | HTTP API настроек уведомлений на внутреннем порту `8081`: JWT и отдельная БД |
+| `cmd/outbox-relay` | Публикация основного и retry/DLQ outbox в Kafka |
+| `cmd/notifier` | Kafka consumer, inbox и доставка через email/Telegram из отдельной БД |
 
 ## Стек
 
@@ -24,122 +27,66 @@ FeedFlow — backend для автоматического сбора публи
 
 ```text
 cmd/api/            монолит
-cmd/notifier/       сервис нотификаций
+cmd/gateway/        общий HTTP gateway
+cmd/notification-api/ HTTP API настроек уведомлений
+cmd/outbox-relay/   relay для обоих outbox
+cmd/notifier/       приём событий и доставка
 internal/           бизнес-логика и внутренние пакеты
 contracts/          межсервисные контракты
 deploy/             скрипты настройки инфраструктуры
 .github/workflows/  CI/CD
-docker-compose.yml  инфраструктура и миграции
-Dockerfile          сборка монолита
+docker-compose.yml  инфраструктура, миграции и профиль app
+Dockerfile          сборка каждого HTTP-приложения
 Taskfile.yml        команды разработки
 ```
 
 ## Запуск
 
-Для локального запуска нужны Go 1.25, Docker с Docker Compose и OpenSSL. Для команд `task` дополнительно нужен Task; для форматирования и линтинга — `golangci-lint` v2. Все команды ниже выполняются из корня проекта.
-
-### 1. Настроить окружение
-
-Создайте `.env` или дополните существующий файл настройками для локальной разработки:
+Нужны Docker с Docker Compose и OpenSSL. Создайте `.env` с настройками PostgreSQL и JWT:
 
 ```dotenv
 DB_USER=feedflow
 DB_PASSWORD=feedflow_dev
 DB_NAME=feedflow
-DB_HOST=localhost
-DB_PORT=5432
-
-REDIS_NAME=feedflow_redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-
-JWT_PRIVATE_KEY_PATH=.secrets/jwt/private.pem
-JWT_PUBLIC_KEY_PATH=.secrets/jwt/public.pem
 JWT_KEY_ID=local-1
 JWT_ISSUER=feedflow-auth
-JWT_ACCESS_TOKEN_TTL=15m
 ```
 
-Один раз сгенерируйте пару JWT-ключей:
+Один раз создайте ключи, затем запустите все сервисы:
 
 ```sh
 sh deploy/auth/generate-dev-keys.sh
+docker compose --profile app up --build -d
 ```
 
-### 2. Поднять инфраструктуру и применить миграции
+API доступен через gateway на `http://localhost:8080`. Для отправки уведомлений добавьте в `.env` `TELEGRAM_BOT_TOKEN` или `SMTP_HOST` и `SMTP_FROM_ADDRESS`.
 
-```sh
-docker compose up -d db redis
-docker compose run --rm migrations
-```
-
-### 3. Запустить монолит
-
-```sh
-go run ./cmd/api
-```
-
-API доступен по адресу `http://localhost:8080`. Проверить публичный каталог источников можно командой:
-
-```sh
-curl http://localhost:8080/v1/feeds
-```
-
-Для защищённых запросов зарегистрируйтесь через `POST /v1/users` с JSON `{"name":"Alice"}`, затем обменяйте полученный `api_key` на JWT:
-
-```sh
-curl -X POST http://localhost:8080/v1/auth/token \
-  -H 'Authorization: ApiKey <api_key>'
-```
-
-Полученный `access_token` передавайте как `Authorization: Bearer <access_token>`. Основные маршруты: `POST /v1/feeds`, `POST /v1/feed_follows` с JSON `{"feedId":"<uuid>"}`, `GET /v1/posts?limit=10&offset=0` и `/v1/notification-channel` для настройки уведомлений.
-
-### 4. Запустить сервис нотификаций
-
-Добавьте в `.env` настройки хотя бы одного отправителя:
-
-| Канал | Настройки |
-| --- | --- |
-| Telegram | `TELEGRAM_BOT_TOKEN`; при создании пользовательского канала в `destination` укажите chat ID |
-| Email | `SMTP_HOST`, `SMTP_FROM_ADDRESS`; при необходимости авторизации — одновременно `SMTP_USERNAME` и `SMTP_PASSWORD` |
-
-Дополнительные SMTP-параметры: `SMTP_PORT` (по умолчанию `587`), `SMTP_TLS_MODE` (`starttls` по умолчанию, также `implicit` или `none`), `SMTP_TIMEOUT` (по умолчанию `10s`) и `SMTP_FROM_NAME`.
-
-В отдельном терминале выполните:
-
-```sh
-go run ./cmd/notifier
-```
-
-### Команды разработки
-
-Основные команды вынесены в `Taskfile.yml`:
+Команды разработки из `Taskfile.yml`:
 
 | Команда | Что делает |
 | --- | --- |
 | `task` | Показывает доступные команды |
-| `task run` | Запускает монолит локально |
-| `task build` | Собирает монолит в `bin/api` |
-| `task test` | Запускает тесты всех пакетов |
-| `task test:race` | Запускает тесты с race detector |
 | `task fmt` | Форматирует Go-код |
+| `task fmt:check` | Проверяет форматирование без изменений |
 | `task lint` | Запускает статический анализ |
+| `task test` | Запускает все тесты |
+| `task test:race` | Запускает тесты с race detector |
+| `task build` | Собирает монолит в `bin/api` |
+| `task run` | Запускает монолит локально |
+| `task run:notification-api` | Запускает API уведомлений локально |
+| `task run:gateway` | Запускает gateway локально |
+| `task tidy` | Обновляет зависимости Go-модуля |
 | `task check` | Проверяет форматирование, линтинг и тесты |
-| `docker compose logs -f` | Показывает логи инфраструктуры |
-| `docker compose down` | Останавливает инфраструктуру с сохранением данных в volumes |
 
-Без Task тесты запускаются напрямую, в том числе для отдельного пакета:
+Для управления контейнерами:
+
+| Команда | Что делает |
+| --- | --- |
+| `docker compose --profile app logs -f` | Показывает логи сервисов |
+| `docker compose --profile app down` | Останавливает сервисы |
+
+Отдельный пакет можно проверить напрямую:
 
 ```sh
-go test ./...
 go test ./internal/notification/worker
 ```
-
-### Опциональная Kafka
-
-```sh
-docker compose --profile kafka up -d kafka kafka-init
-```
-
-Брокер доступен на `localhost:9092`; `kafka-init` создаёт основной топик, три retry-топика и DLQ. Монолит уже сохраняет `notification.requested` в outbox для каждого подписчика новой публикации, но relay и consumer ещё не реализованы. Текущая доставка продолжает работать через PostgreSQL и `post.created`; Kafka для неё не нужна.
-

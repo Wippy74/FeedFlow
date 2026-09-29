@@ -2,6 +2,8 @@
 .github
 .idea
 .env
+.secrets
+graphify-out
 bin
 coverage.out
 *.test

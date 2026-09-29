@@ -25,7 +25,7 @@ func TestPostFeedGeneratesIDOnServer(t *testing.T) {
 		},
 	}, &MockCache{
 		DeleteFn: func(_ context.Context, key string) error {
-			assert.Equal(t, "feeds:all", key)
+			assert.Equal(t, firstFeedsPageKey, key)
 			cacheDeleted = true
 			return nil
 		},

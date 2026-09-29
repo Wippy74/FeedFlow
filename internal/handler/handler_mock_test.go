@@ -12,7 +12,7 @@ import (
 type MockStorage struct {
 	SaveUserFn        func(ctx context.Context, id uuid.UUID, name, apiKey string) (model.User, error)
 	AddFeedFn         func(ctx context.Context, id uuid.UUID, name, url string) (model.Feed, error)
-	GetAllFeedsFn     func(ctx context.Context) ([]model.Feed, error)
+	GetFeedsPageFn    func(ctx context.Context, after *uuid.UUID, limit int) ([]model.Feed, error)
 	FollowFeedFn      func(ctx context.Context, userID, feedID uuid.UUID) error
 	GetPostsFn        func(ctx context.Context, userID uuid.UUID, limit, offset int) ([]model.Post, error)
 	SavePostFn        func(ctx context.Context, post model.Post) error
@@ -33,9 +33,9 @@ func (m *MockStorage) AddFeed(ctx context.Context, id uuid.UUID, name, url strin
 	return model.Feed{}, nil
 }
 
-func (m *MockStorage) GetAllFeeds(ctx context.Context) ([]model.Feed, error) {
-	if m.GetAllFeedsFn != nil {
-		return m.GetAllFeedsFn(ctx)
+func (m *MockStorage) GetFeedsPage(ctx context.Context, after *uuid.UUID, limit int) ([]model.Feed, error) {
+	if m.GetFeedsPageFn != nil {
+		return m.GetFeedsPageFn(ctx, after, limit)
 	}
 	return []model.Feed{}, nil
 }
